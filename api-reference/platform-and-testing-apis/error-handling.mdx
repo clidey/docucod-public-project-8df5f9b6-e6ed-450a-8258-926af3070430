@@ -1,0 +1,184 @@
+---
+title: "Error Handling and Status Codes"
+description: "Documents all error types and status codes returned by API methods, including common failure causes (such as missing providers, OS integration issues, or secrets not found). Provides practical recommendations for robust error management in application code."
+---
+
+# Error Handling and Status Codes
+
+This page documents all error types and HTTP status codes returned by the go-keyring API methods, focusing on common failure causes such as missing providers, OS integration issues, and secrets not found. It provides actionable guidance and best practices to implement resilient error management in your application code when interacting with system keyrings.
+
+---
+
+## Understanding Error Types
+
+The go-keyring library defines specific error types that you will encounter while performing secret management operations. Understanding these errors and their causes is crucial for building robust applications that handle failures gracefully.
+
+### Key Errors Returned by API Methods
+
+| Error Constant       | Description                                                                                              | When to Expect                               |
+|---------------------|----------------------------------------------------------------------------------------------------------|---------------------------------------------|
+| `ErrNotFound`       | The requested secret was not found in the keyring.                                                      | On `Get` or `Delete` calls if no matching secret exists.
+| `ErrSetDataTooBig`  | The data size for the secret exceeds platform-specific limits.                                         | On `Set` when the secret is too large for the underlying OS keyring.
+| `ErrUnsupportedPlatform` | The current OS is not supported by the go-keyring provider.                                            | When running on an unsupported OS or environment.
+
+
+### Common Failure Causes
+
+- **Missing Providers**: The API relies on native OS keyring services (macOS Keychain, Linux Secret Service, Windows Credential Manager). If these services are missing, inaccessible, or misconfigured, certain API calls will fail.
+- **OS Integration Issues**: Permissions, locked keychains, or uninitialized keyring collections may cause unlock or access errors.
+- **Secret Not Found**: Attempting to retrieve or delete a secret that does not exist will result in a `ErrNotFound` error, signaling the absence of the secret.
+- **Exceeding Size Limits**: Each platform enforces different size limits on stored secrets; exceeding these limits results in `ErrSetDataTooBig`.
+
+<Note>
+Platform-specific size constraints:
+- **macOS**: Combined length of service, username, and password should not exceed approximately 3000 bytes.
+- **Windows**: Service limited to 32 KiB; password limited to 2560 bytes.
+- **Linux/Unix**: No strict limit, but very large values (>100 KiB) may degrade performance.
+</Note>
+
+---
+
+## Status Codes and Error Handling in Your Application
+
+The go-keyring API does not use HTTP status codes but returns Go errors to represent success or failure of operation. Here’s how to interpret and handle them:
+
+### Typical Error Handling Flow
+
+1. **Call an API method** like `Set()`, `Get()`, or `Delete()` passing service and user identifiers.
+2. **Check the returned error**.
+3. **Inspect the error to determine the cause** and decide the retries, user feedback, or fallback behavior.
+
+### Recommended Best Practices
+
+- Always check and explicitly handle `ErrNotFound` to distinguish missing secrets from other failures.
+- When `ErrSetDataTooBig` occurs, log the failure and inform the user appropriately; consider encrypting or compressing data before storage.
+- For any unsupported platform error (`ErrUnsupportedPlatform`), fallback gracefully or disable keyring functionality.
+- Wrap keyring interactions in retry or fallback logic, especially when dealing with transient OS integration issues.
+
+### Example: Handling Errors When Retrieving a Secret
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+
+    "github.com/zalando/go-keyring"
+)
+
+func main() {
+    service := "my-application"
+    user := "username"
+
+    secret, err := keyring.Get(service, user)
+
+    if err != nil {
+        switch err {
+        case keyring.ErrNotFound:
+            fmt.Println("Secret not found, please set it first.")
+            // Handle missing secret case
+        case keyring.ErrUnsupportedPlatform:
+            fmt.Println("Keyring not supported on this platform.")
+            // Disable keyring feature or fallback
+        default:
+            log.Fatalf("Unexpected error: %v", err)
+        }
+        return
+    }
+
+    fmt.Printf("Retrieved secret: %s\n", secret)
+}
+```
+
+---
+
+## Platform-Specific Failure Scenarios
+
+### macOS
+- If `/usr/bin/security` binary is missing or inaccessible, API calls will fail.
+- Long secrets or multi-line passwords are encoded but may cause `ErrSetDataTooBig` if exceeding ~3000 bytes in combination with service and username.
+
+### Linux/BSD
+- Errors from DBus interface or failure to unlock the default keyring `login` collection results in errors.
+- Secret Service daemon must be running and accessible.
+- Missing or locked collections produce unlock errors.
+
+### Windows
+- The Windows Credential Manager has size limits; random large secrets will return `ErrSetDataTooBig`.
+- Access permissions to Credential Manager must be granted.
+
+---
+
+## Practical Tips for Robust Error Management
+
+- **Validate Input Sizes** before calling `Set` to avoid hitting size limits.
+- **Encapsulate Keyring Calls** in helper functions that translate errors into user-friendly messages or specific return codes.
+- **Use Logging Extensively** when an error is returned to aid debugging keyring issues.
+- **Test for Missing Keys** explicitly, so your app can prompt users to reauthenticate or set secrets.
+- **Leverage the Mock Provider** during testing to simulate error conditions without platform dependencies.
+
+<Check>
+Use the `MockInit()` function to enable a mock provider for your unit and integration tests, allowing you to simulate errors like `ErrNotFound` or `ErrSetDataTooBig` and validate your error handling logic cleanly.
+</Check>
+
+---
+
+## Summary of Key Error Constants
+
+```go
+var (
+    // ErrNotFound is returned when the secret is not found in the keyring.
+    ErrNotFound = errors.New("secret not found in keyring")
+
+    // ErrSetDataTooBig is returned when the secret exceeds platform-specific size limits.
+    ErrSetDataTooBig = errors.New("data passed to Set was too big")
+
+    // ErrUnsupportedPlatform is returned on unsupported platforms.
+    ErrUnsupportedPlatform = errors.New("unsupported platform")
+)
+```
+
+Refer to [keyring.go source code](https://github.com/zalando/go-keyring/blob/main/keyring.go) for these definitions and further context.
+
+---
+
+## Troubleshooting Common Errors
+
+### 1. Secret Not Found (`ErrNotFound`)
+- Verify service and username strings match the stored values exactly.
+- Confirm the secret was successfully set before attempting to get or delete.
+
+### 2. Data Too Large (`ErrSetDataTooBig`)
+- Reduce password size or split secrets logically.
+- Compress or encode data before storing.
+- Consult platform-specific size limits to adjust accordingly.
+
+### 3. Unsupported Platform (`ErrUnsupportedPlatform`)
+- Confirm the operating system is one of macOS, Linux/BSD, or Windows.
+- Use the mock provider when developing or testing outside supported platforms.
+
+### 4. OS Integration Issues
+- Ensure that the OS keyring service (e.g., macOS `security`, Linux’s Secret Service daemon) is running and accessible.
+- Check permissions and user access to the keyring.
+- Inspect system logs or keyring GUI tools (like Seahorse on Linux) for errors.
+
+---
+
+## Additional Resources
+
+- [Platform Integration & Dependencies](https://docs.example.com/overview/architecture-usecases-integration/platform-integration) — Learn about native keyring service dependencies.
+- [Troubleshooting & Common Setup Issues](https://docs.example.com/getting-started/usage-validation/troubleshooting) — For in-depth issue diagnosis and resolutions.
+- [Mock Provider for Testing](https://docs.example.com/api-reference/platform-and-testing-apis/mock-provider) — How to simulate errors and isolate tests.
+- [Set Secret API](https://docs.example.com/api-reference/core-keyring-apis/set-secret) — For details on secret storage and related errors.
+
+
+---
+
+This documentation page ensures you have the knowledge to precisely detect, handle, and recover from common errors and exceptional situations encountered with go-keyring API methods, empowering your applications to manage secrets securely and reliably.
+
+---
+
+<style>
+  code {background-color:#f6f8fa; padding:0.2em 0.4em; border-radius:3px;}
+</style>

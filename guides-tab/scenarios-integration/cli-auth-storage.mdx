@@ -1,0 +1,269 @@
+---
+title: "Using go-keyring in CLI Applications"
+description: "See how go-keyring simplifies credential management for CLI tools requiring persistent, secure user authentication. Covers design strategies, user prompts, and how to ensure a seamless user experience without exposing sensitive data."
+---
+
+# Using go-keyring in CLI Applications
+
+Go-keyring offers an elegant and secure way for CLI tools to manage persistent user credentials without compromising security or user convenience. This guide teaches you how to seamlessly integrate go-keyring in your CLI applications to store, retrieve, and manage user secrets behind the scenes—eliminating the need for users to repeatedly enter passwords or tokens.
+
+---
+
+## Why Use go-keyring in CLI Applications?
+
+Imagine a CLI tool that asks for your credentials every time you run it — frustrating and prone to security risks from manual entry or saving credentials insecurely (e.g., plaintext files). go-keyring solves this by securely storing user secrets using the native OS keyring APIs, providing:
+
+- **Cross-platform support:** Works natively on macOS, Windows, and Linux/BSD
+- **Security:** Keeps sensitive data out of config files and environment variables
+- **User Experience:** Smooth authentication flows without prompting users unnecessarily
+- **Ease of development:** Simple API to set, get, and delete secrets
+
+With go-keyring, your CLI can authenticate users once, store credentials securely, and seamlessly re-use them on subsequent runs, making your tool more professional and user-friendly.
+
+---
+
+## Prerequisites
+
+Before integrating go-keyring into your CLI:
+
+- Your application is in Go and can import the `github.com/zalando/go-keyring` package.
+- The target user's system has the native keyring backend:
+  - macOS: macOS Keychain accessible via the `security` binary
+  - Linux/BSD: Secret Service DBus interface with GNOME Keyring
+  - Windows: Windows Credential Manager
+- Keyring backend prerequisites installed and configured (e.g., GNOME Keyring active on Linux)
+- Basic knowledge of how your CLI handles user authentication
+
+---
+
+## Workflow Overview
+
+### Goal
+Enable your CLI to store user credentials securely once and retrieve them on subsequent runs, avoiding repeated user prompts.
+
+### Expected Outcome
+- Credentials are securely stored in the OS keyring
+- CLI retrieves stored credentials automatically
+- Credentials can be deleted upon logout or user request
+
+### Estimated Time
+30 minutes to integrate basic set/get/delete operations and test across supported platforms.
+
+### Difficulty Level
+Intermediate (assumes familiarity with Go, basic OS keyring concepts, and CLI programming)
+
+---
+
+## Step-by-Step Integration Guide
+
+### Step 1: Import go-keyring
+
+Add the import statement to your CLI application:
+
+```go
+import "github.com/zalando/go-keyring"
+```
+
+
+### Step 2: Define Service and User Identifiers
+
+Choose consistent `service` and `user` strings that uniquely identify your application and users:
+
+- `service`: A meaningful application name, e.g., "my-cli-tool"
+- `user`: Typically a username or identifier, e.g., the logged-in user's username or email
+
+These identifiers namespace your secrets in the keyring.
+
+### Step 3: Store Credentials When User Authenticates
+
+After your CLI collects credentials (password/token) from the user, securely save them:
+
+```go
+service := "my-cli-tool"
+user := "user@example.com"
+password := "user-secret-password-or-token"
+
+err := keyring.Set(service, user, password)
+if err != nil {
+    // Handle errors like keyring access failure or oversized passwords
+    log.Fatalf("Failed to store credentials: %v", err)
+}
+```
+
+**Tips:**
+- Validate the size of your secrets; large secrets might cause `ErrSetDataTooBig`.
+- Encode multi-line or special characters as needed (the library automatically addresses this on macOS).
+
+### Step 4: Retrieve Credentials on CLI Start
+
+When your CLI needs authentication, first try loading credentials from the keyring:
+
+```go
+password, err := keyring.Get(service, user)
+if err != nil {
+    if err == keyring.ErrNotFound {
+        // No saved credentials: prompt user interactively
+    } else {
+        // Handle other errors
+        log.Fatalf("Failed to get credentials: %v", err)
+    }
+}
+// Use the retrieved password/token
+```
+
+This allows your CLI to skip the login prompt when credentials exist.
+
+### Step 5: Delete Credentials on Logout or Token Revocation
+
+To remove credentials securely, call:
+
+```go
+err := keyring.Delete(service, user)
+if err != nil {
+    if err == keyring.ErrNotFound {
+        // Already deleted or never set
+    } else {
+        log.Fatalf("Failed to delete credentials: %v", err)
+    }
+}
+```
+
+You can also erase all credentials for your application service:
+
+```go
+err := keyring.DeleteAll(service)
+if err != nil {
+    log.Fatalf("Failed to delete all credentials for service %s: %v", service, err)
+}
+```
+
+### Step 6: Handle Edge Cases & Errors Gracefully
+
+- **ErrNotFound:** The requested secret does not exist.
+- **ErrSetDataTooBig:** Data exceeds platform limits, consider truncation or alternate storage.
+- Platform-specific failures due to missing keyring backend or permission issues (refer to [Platform Integration & Dependencies](https://docs.example.com/overview/architecture-usecases-integration/platform-integration) for setup).
+
+Fall back to prompting users interactively when secrets are missing or problematic.
+
+### Step 7: Testing Your Integration
+
+- Use the in-memory mock provider during CLI unit testing by calling `keyring.MockInit()` to simulate keyring without platform dependency.
+
+```go
+keyring.MockInit()
+err := keyring.Set(service, user, password)
+// continue testing Set/Get/Delete flow
+```
+
+- Perform cross-platform testing to verify OS-specific behaviors.
+
+---
+
+## Real-World Example
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    "os"
+
+    "github.com/zalando/go-keyring"
+)
+
+func main() {
+    service := "example-cli"
+    user := "alice@example.com"
+
+    // Try to get password from keyring
+    password, err := keyring.Get(service, user)
+    if err != nil {
+        if err == keyring.ErrNotFound {
+            // Prompt user to enter password
+            fmt.Print("Enter password: ")
+            var input string
+            fmt.Scanln(&input)
+
+            // Save to keyring for next time
+            err := keyring.Set(service, user, input)
+            if err != nil {
+                log.Fatalf("Failed to save password: %v", err)
+            }
+
+            password = input
+        } else {
+            log.Fatalf("Keyring error: %v", err)
+        }
+    }
+
+    // Use password for API authentication, etc.
+    fmt.Printf("Using stored password of length %d characters\n", len(password))
+    
+    // Example: on logout, delete stored credentials
+    // _ = keyring.Delete(service, user)
+}
+```
+
+---
+
+## Best Practices
+
+- **Consistent identifiers:** Use unique service and user strings to avoid clashing with other apps.
+- **Minimal secrets:** Keep stored secrets as small as possible to avoid size limits.
+- **Error handling:** Always check for errors on set/get/delete and handle `ErrNotFound` gracefully.
+- **Secure fallback:** If keyring is unavailable, decide on a secure fallback or prompt user each time.
+- **Avoid storing plaintext tokens for long periods:** Consider token rotation and deletion strategies.
+
+---
+
+## Troubleshooting Common Issues
+
+<AccordionGroup title="Common Issues in CLI Integration">
+<Accordion title="Keyring Backend Not Available or Unsupported Platform">
+On unsupported platforms, the go-keyring fallback provider returns `ErrUnsupportedPlatform`. 
+
+**Solution:** Verify platform support, install required native dependencies (like GNOME Keyring on Linux), or use mock provider in tests.
+</Accordion>
+
+<Accordion title="Set Operation Fails with ErrSetDataTooBig">
+Secret size limits vary by platform:
+- macOS: ~3000 bytes combined
+- Windows: password ≤ 2560 bytes, service ≤ 32 KiB
+
+**Solution:** Reduce secret size or split data; avoid storing large binary blobs.
+</Accordion>
+
+<Accordion title="Cannot Retrieve Stored Password (ErrNotFound)">
+This indicates the requested secret is missing or deleted.
+
+**Solution:** Prompt the user for authentication and store again if legitimate.
+</Accordion>
+
+<Accordion title="Multi-line or Unicode Password Issues">
+go-keyring handles encoding automatically, but confirm the input encoding and keyring backend compatibility.
+</Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps & Further Reading
+
+After integrating go-keyring in your CLI, consider:
+
+- [Deleting Secrets from the Keyring](https://docs.example.com/guides-tab/core-workflows/secrets-delete) to manage lifecycle
+- [Testing and Mocking go-keyring Operations](https://docs.example.com/guides-tab/scenarios-integration/testing-mocking) for robust unit tests
+- [Troubleshooting OS-Specific Issues](https://docs.example.com/guides-tab/scenarios-integration/os-specific-troubleshooting) for platform nuances
+- Reviewing [Platform Integration & Dependencies](https://docs.example.com/overview/architecture-usecases-integration/platform-integration) to optimize environment setup
+
+---
+
+## References
+
+- [go-keyring GitHub Repository](https://github.com/zalando/go-keyring)
+- [Core Keyring API Reference](https://docs.example.com/api-reference/core-keyring-apis/set-secret)
+- [Mock Provider API for Testing](https://docs.example.com/api-reference/platform-and-testing-apis/mock-provider)
+
+---
+
+This guide empowers your CLI to deliver secure, seamless user authentication by leveraging native OS keyrings through go-keyring's simple and robust API.

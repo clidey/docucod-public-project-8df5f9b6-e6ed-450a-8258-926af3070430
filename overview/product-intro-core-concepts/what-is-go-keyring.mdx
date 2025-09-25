@@ -1,0 +1,109 @@
+---
+title: "What is go-keyring?"
+description: "A concise explanation of go-keyring as an OS-agnostic library for securely storing, retrieving, and deleting secrets natively using the system keyring. Describes the problem space, core objectives, and the unique value provided to developers needing seamless cross-platform credential storage."
+---
+
+# What is go-keyring?
+
+## Unlock Seamless, Secure Credential Management Across Platforms
+
+go-keyring is a powerful, OS-agnostic Go library designed to let you securely store, retrieve, and delete sensitive information like passwords directly in your system's native keyring. Rather than inventing a new storage solution, it seamlessly integrates with the underlying platform’s official credential storage mechanisms, providing a consistent and trustworthy way to manage secrets across macOS, Linux/BSD, and Windows.
+
+## Why go-keyring Matters
+
+Imagine building a CLI tool or application needing to authenticate users but avoiding the hassle and risk of repeatedly prompting for credentials. Instead of relying on environment variables or unprotected local files, go-keyring empowers your software to tap into the secure, encrypted credentials vault already provided by operating systems — in turn, enhancing security and improving user convenience.
+
+### Key Benefits at a Glance
+- **Cross-Platform Consistency:** Uniform API for macOS, Linux/BSD, and Windows keyrings, abstracting away platform quirks.
+- **Native Security:** Utilizes the OS’s secure storage, minimizing the risk of exposing credentials.
+- **Developer Simplicity:** Minimal dependencies and straightforward API design for easy integration.
+- **Lightweight & Dependency-Free:** Avoids cumbersome C bindings and complex native dependencies.
+
+### Who Should Use go-keyring?
+- Developers building CLI tools or desktop apps requiring local credential storage.
+- Teams aiming for secure, native key-based authentication flows.
+- Projects targeting multiple operating systems without rewriting credential management code.
+
+---
+
+## What is go-keyring?
+
+go-keyring is a Go library that provides an easy, standardized interface to interact with system-level keyring services. These keyring services securely save secrets such as passwords, tokens, or API keys in encrypted vaults managed by the operating system.
+
+By offering methods to set, get, and delete secrets tied to specific service and username pairs, go-keyring abstracts the underlying differences between native keychain implementations on macOS, the Secret Service DBus interface on Linux/BSD, and the Windows Credential Manager.
+
+## Solving the Credential Storage Problem
+
+Storing secrets securely on a user's machine is critical yet complex due to differing platform APIs, formats, and security practices. Manually handling credentials risks leaks, requires additional encryption layers, and adds complexity.
+
+go-keyring solves this by:
+- **Abstracting platform-specific details** so you write uniform code.
+- **Delegating security management** to the native system, which has proven, audited implementations with user-level encryption safeguards.
+- **Handling common pitfalls** like multiline secrets and maximum data size limitations.
+
+This makes it ideal for CLI applications that need to authenticate with remote services without repeatedly prompting for user input or insecurely caching credentials.
+
+## What Makes go-keyring Unique?
+
+- **OS-Agnostic Elegance:** Supports macOS keychain, Linux/BSD Secret Service, and Windows Credential Manager with the same API.
+- **No C Bindings:** Unlike many other keyring libraries, go-keyring avoids C dependencies, improving binary portability.
+- **Mockable for Testing:** Provides an in-memory mock keyring to enable easy unit testing without platform dependencies.
+- **Clear Error Handling:** Returns explicit errors when data is missing or too large, enabling predictable workflows.
+
+## How Does It Work at a High Level?
+
+Rather than reinventing the wheel, go-keyring dynamically delegates secret storage operations to a platform-specific provider:
+
+- On **macOS**, it uses the `/usr/bin/security` command-line tool to communicate with the system keychain.
+- On **Linux and BSD**, it interfaces with the Secret Service API over DBus (commonly backed by GNOME Keyring or other compatible services).
+- On **Windows**, it utilizes the Windows Credential Manager APIs via a Go wrapper.
+
+Your Go code calls simple functions like `Set(service, user, password)`, and go-keyring handles the rest under the hood, ensuring secure, native storage of credentials.
+
+<CodeGroup>
+```go
+// Setting a secret
+err := keyring.Set("myapp", "alice", "supersecret")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Retrieving a secret
+secret, err := keyring.Get("myapp", "alice")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println("Retrieved secret:", secret)
+```
+</CodeGroup>
+
+By using go-keyring, you ensure your app treats user secrets with the same security and care as the platform itself does.
+
+---
+
+## Practical Example: Simplifying CLI Authentication
+
+Picture a command-line tool that connects to a remote API using basic authentication. Without go-keyring, users might need to supply credentials every time or store them insecurely in plain text.
+
+With go-keyring:
+
+1. **User authenticates once,** the tool saves credentials securely in the OS keyring.
+2. **Next time, the tool reads credentials silently** from the keyring, eliminating repeated prompts.
+3. **Credentials are never exposed in environment variables or logs.**
+
+This flow improves user experience while maintaining high security integrity.
+
+---
+
+## Additional Resources
+
+For further detail on how to install, configure, and integrate go-keyring into your projects, see the following documentation sections:
+
+- [Core Features & Benefits](../overview/product-intro-core-concepts/features-and-benefits)
+- [Platform Integration & Dependencies](../overview/architecture-usecases-integration/platform-integration)
+- [Quickstart: Set and Get Your First Secret](../../getting-started/usage-validation/quickstart-example)
+
+---
+
+Go-keyring unlocks robust, native secret management with a developer-friendly API, so you can focus on building secure applications without reinventing credential storage across platforms.
+

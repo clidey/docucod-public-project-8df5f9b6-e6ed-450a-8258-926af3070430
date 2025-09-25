@@ -1,0 +1,116 @@
+{
+  "background": {
+    "decoration": "gradient"
+  },
+  "colors": {
+    "dark": "#1E3A8A",
+    "light": "#60A5FA",
+    "primary": "#60A5FA"
+  },
+  "favicon": "/favicon.svg",
+  "fonts": {
+    "family": "Montserrat",
+    "format": "woff2",
+    "source": "https://fonts.gstatic.com/s/googlesansflex/v5/t5sJIQcYNIWbFgDgAAzZ34auoVyXkJCOvp3SFWJbN5hF8Ju1x6sKCyp0l9sI40swNJwGpVd4AZzz0v6lJ4qFXNZhGjLvDSkV4USKMo6qQzwliVdHAy9jxTDHg_ugnAakpwGc-cxgUqDCIUI.woff2"
+  },
+  "icons": {
+    "library": "fontawesome"
+  },
+  "logo": {
+    "dark": "./logo/logo.svg",
+    "light": "./logo/logo.svg"
+  },
+  "name": "Go Keyring",
+  "navigation": {
+    "tabs": [
+      {
+        "groups": [
+          {
+            "group": "Product Introduction \u0026 Core Concepts",
+            "pages": [
+              "overview/product-intro-core-concepts/what-is-go-keyring",
+              "overview/product-intro-core-concepts/features-and-benefits",
+              "overview/product-intro-core-concepts/key-terms-concepts"
+            ]
+          },
+          {
+            "group": "Architecture, Use Cases \u0026 Integrations",
+            "pages": [
+              "overview/architecture-usecases-integration/architecture-overview",
+              "overview/architecture-usecases-integration/target-audience-use-cases",
+              "overview/architecture-usecases-integration/platform-integration"
+            ]
+          }
+        ],
+        "tab": "Overview"
+      },
+      {
+        "groups": [
+          {
+            "group": "Setup Essentials",
+            "pages": [
+              "getting-started/setup-basics/prerequisites",
+              "getting-started/setup-basics/installation",
+              "getting-started/setup-basics/configuration"
+            ]
+          },
+          {
+            "group": "First Usage \u0026 Validation",
+            "pages": [
+              "getting-started/usage-validation/quickstart-example",
+              "getting-started/usage-validation/troubleshooting",
+              "getting-started/usage-validation/mock-validation"
+            ]
+          }
+        ],
+        "tab": "Getting Started"
+      },
+      {
+        "groups": [
+          {
+            "group": "Core Keyring APIs",
+            "pages": [
+              "api-reference/core-keyring-apis/set-secret",
+              "api-reference/core-keyring-apis/get-secret",
+              "api-reference/core-keyring-apis/delete-secret"
+            ]
+          },
+          {
+            "group": "Platform-Specific Providers \u0026 Testing",
+            "pages": [
+              "api-reference/platform-and-testing-apis/provider-overview",
+              "api-reference/platform-and-testing-apis/mock-provider",
+              "api-reference/platform-and-testing-apis/error-handling"
+            ]
+          }
+        ],
+        "tab": "API Reference"
+      },
+      {
+        "groups": [
+          {
+            "group": "Getting Started \u0026 Core Workflows",
+            "pages": [
+              "guides-tab/core-workflows/setup-quickstart",
+              "guides-tab/core-workflows/secrets-store-get",
+              "guides-tab/core-workflows/secrets-delete"
+            ]
+          },
+          {
+            "group": "Use Cases \u0026 Integration Patterns",
+            "pages": [
+              "guides-tab/scenarios-integration/cli-auth-storage",
+              "guides-tab/scenarios-integration/testing-mocking",
+              "guides-tab/scenarios-integration/os-specific-troubleshooting"
+            ]
+          }
+        ],
+        "tab": "Guides"
+      }
+    ]
+  },
+  "styling": {
+    "codeblocks": "dark",
+    "eyebrows": "breadcrumbs"
+  }
+}

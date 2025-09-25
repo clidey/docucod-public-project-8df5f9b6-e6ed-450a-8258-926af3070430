@@ -1,0 +1,172 @@
+---
+title: "Configuration and First Steps"
+description: "Walk through the minimal configuration needed to integrate go-keyring. Includes service and user parameter selection, and setting up your environment for a first run."
+---
+
+# Configuration and First Steps
+
+Integrating **go-keyring** into your project begins with a straightforward but essential configuration phase. This guide takes you through selecting the right service and user identifiers and preparing your environment for your initial operations with the library. By following these steps, you'll ensure smooth secret storage and retrieval from the system keyring.
+
+---
+
+## 1. Understanding Service and User Parameters
+
+Before interacting with the keyring, you need to define two critical parameters:
+
+- **Service**: This is a unique identifier for your application or service. It acts as a namespace to group secrets related to your app. Choose a clear, concise name (e.g., `my-cli-app`, `database-connector`).
+
+- **User**: This represents the user or account identity associated with the secret. It usually reflects a username or account name within your system or application.
+
+**Why it matters:** These parameters determine how your stored secrets are scoped and retrieved. Using consistent and meaningful values makes managing secrets more predictable and secure.
+
+---
+
+## 2. Preparing Your Environment
+
+### OS-Level Keyring Dependencies
+
+go-keyring relies on the native key management mechanisms provided by the underlying operating system. Ensure the following are in place:
+
+| Platform   | Keyring Dependency                                  | Notes                                                                                 |
+|------------|----------------------------------------------------|---------------------------------------------------------------------------------------|
+| macOS      | `/usr/bin/security` (built-in)                     | Usually pre-installed. No additional setup required unless customized environments.    |
+| Linux/BSD  | DBus interface with GNOME Keyring (Secret Service) | Confirm that `login` keyring exists; use Seahorse to create if missing.                |
+| Windows    | Windows Credential Manager                          | Available by default on supported Windows versions.                                  |
+
+<Tip>
+If you are on Linux/BSD and your default keyring named `login` is missing or not unlocked, use the Seahorse application:
+
+1. Open `seahorse`.
+2. Navigate to **File > New > Password Keyring**.
+3. Name the keyring `login`.
+4. Save and unlock it to enable access.
+</Tip>
+
+### Environment Configuration
+
+No special environment variables or configuration files are needed to start using go-keyring. The library detects and integrates with the platform's native keyring automatically.
+
+---
+
+## 3. Minimal Code Setup Example
+
+Below is a minimal snippet demonstrating how to configure your `service` and `user` parameters for storing and retrieving a secret.
+
+```go
+package main
+
+import (
+    "log"
+    "github.com/zalando/go-keyring"
+)
+
+func main() {
+    // Define your service and user identifiers
+    service := "my-cli-app"
+    user := "user@example.com"
+
+    // Password or secret to store
+    password := "superSecret123"
+
+    // Store the secret in keyring
+    err := keyring.Set(service, user, password)
+    if err != nil {
+        log.Fatalf("Failed to set secret: %v", err)
+    }
+
+    // Retrieve the secret back
+    retrieved, err := keyring.Get(service, user)
+    if err != nil {
+        log.Fatalf("Failed to get secret: %v", err)
+    }
+
+    log.Printf("Retrieved secret: %s", retrieved)
+}
+```
+
+<Tip>
+This example assumes your environment meets platform prerequisites and dependencies. The `Set` and `Get` calls are synchronous and will return errors if any issue occurs during access.
+</Tip>
+
+---
+
+## 4. Best Practices for Configuration
+
+- **Consistent Naming:** Use a stable and versioned `service` name to avoid collisions or data loss between different application versions.
+- **Secure User Identifiers:** Avoid exposing sensitive details in the `user` parameter; it should uniquely identify accounts but not leak confidential information.
+- **Limit Secret Size:** Pay attention to platform-specific size limits for secrets (e.g., macOS ~3000 bytes combined, Windows password max 2560 bytes). Oversized secrets cause `ErrSetDataTooBig` errors.
+
+---
+
+## 5. Common Pitfalls and Troubleshooting
+
+<AccordionGroup title="Troubleshooting Common Configuration Issues">
+<Accordion title="Secret Not Found After Setting">
+  Ensure that you are using exactly the same `service` and `user` values to retrieve the secret as when you stored it.
+  
+  On Linux/BSD, confirm the keyring is unlocked and active. Use Seahorse or equivalent management tools.
+  
+  Verify any environment differences between runs—e.g., your application running under different users or permissions.
+</Accordion>
+<Accordion title="ErrSetDataTooBig Error">
+  This error indicates the combined size of the service, user, and password exceeds platform limits.
+  
+  - On macOS and Windows, keep secrets relatively small.
+  - On Linux/BSD, large secrets may slow operations.
+  
+  Consider shortening identifiers or splitting secrets.
+</Accordion>
+<Accordion title="Unsupported Platform Errors">
+  If your platform is not among macOS, Linux/BSD, or Windows, the library falls back to an unsupported state.
+  
+  You may mock the keyring for testing, but no actual keyring storage will occur.
+</Accordion>
+</AccordionGroup>
+
+---
+
+## 6. Moving Forward: Running Your First Operation
+
+Once configured, your next step is to run your first set/get operation with go-keyring. This sets the path for integrating secret storage right into your application's workflow seamlessly.
+
+To continue, please see the [Quickstart: Set and Get Your First Secret](/getting-started/usage-validation/quickstart-example) guide for detailed code examples and execution flows.
+
+---
+
+## Additional Resources
+
+- [go-keyring GitHub Repository](https://github.com/zalando/go-keyring) - Explore source code and contribute
+- [Platform Integration & Dependencies](/overview/architecture-usecases-integration/platform-integration) - Learn about OS-specific keyring internals
+- [Troubleshooting & Common Setup Issues](/getting-started/usage-validation/troubleshooting) - Resolve common errors and issues
+- [Mock Provider for Testing](/getting-started/usage-validation/mock-validation) - Enable tests without native keyring
+
+---
+
+## Summary Diagram of Configuration Flow
+
+```mermaid
+flowchart TD
+  A[Start: Define service and user parameters] --> B{Is platform supported?}
+  B -- Yes --> C[Check for native OS keyring availability]
+  C --> D{Dependencies satisfied?}
+  D -- Yes --> E[Set secret using go-keyring Set()]
+  E --> F[Get secret using go-keyring Get()]
+  F --> G[Success: Secret retrieved matches stored]
+
+  D -- No --> H[Install or enable OS keyring dependencies]
+  H --> C
+  B -- No --> I[Fallback to unsupported platform error]
+
+  style A fill:#f9f,stroke:#333,stroke-width:2px
+  style G fill:#bfb,stroke:#333,stroke-width:2px
+  style I fill:#fbb,stroke:#333,stroke-width:2px
+```
+
+This visual illustrates your initial setup journey from configuration through success or resolution of dependency issues.
+
+---
+
+Your configured parameters become the foundation for all future secret management tasks with go-keyring, enabling secure, platform-native storage with minimal setup effort.
+
+
+

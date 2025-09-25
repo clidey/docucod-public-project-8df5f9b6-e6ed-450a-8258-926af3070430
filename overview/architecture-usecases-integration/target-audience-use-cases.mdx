@@ -1,0 +1,155 @@
+---
+title: "Target Audience & Typical Use Cases"
+description: "Defines the primary users (CLI developers, desktop app devs, system tool authors), as well as common use cases such as saving API credentials, local user auth, and secure token storage. Offers real-world inspiration for how and when to apply go-keyring."
+---
+
+# Target Audience & Typical Use Cases
+
+Unlocking the power of secure local storage for sensitive data is essential for many developers. This page guides you through who benefits most from go-keyring and reveals practical scenarios where it delivers significant value. Whether you’re creating command-line tools, desktop applications, or system utilities, understanding these use cases will help you apply go-keyring confidently and effectively.
+
+---
+
+## Who Is go-keyring For?
+
+### CLI Developers
+Building command-line interfaces that interact with APIs or services often requires handling user credentials securely. go-keyring enables CLI developers to seamlessly store and retrieve credentials locally without prompting users repeatedly.
+
+
+### Desktop Application Developers
+If you're developing desktop apps that need to manage user passwords, tokens, or API keys, go-keyring integrates with native OS keyrings to provide a consistent, secure way to handle secrets that leverages the user's existing security framework.
+
+
+### System Tool and Utility Authors
+Tools that run on a system level or require protected access to credentials—such as automation scripts, backup tools, or system monitors—can use go-keyring to manage secrets securely and transparently.
+
+
+---
+
+## Typical Use Cases
+
+### 1. Storing API Credentials Locally
+Imagine building a CLI client for a cloud service that requires authentication. Instead of forcing users to enter their credentials every time, you can use go-keyring to securely save tokens or passwords locally.
+
+**Benefit:** Smooth user experience by automating credential retrieval while keeping secrets encrypted and safe.
+
+```go
+service := "api-cli-tool"
+user := "user@example.com"
+password := "user-secret-token"
+
+// Save credentials
+err := keyring.Set(service, user, password)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Retrieve credentials on subsequent CLI calls
+storedToken, err := keyring.Get(service, user)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Use 'storedToken' to authenticate requests
+```
+
+---
+
+### 2. Local User Authentication Storage
+Desktop apps that require login functionality benefit from storing passwords or session tokens separately from the app’s code.
+
+**Benefit:** Keeps authentication data safe from leaks and makes session management more convenient.
+
+---
+
+### 3. Securing OAuth Tokens
+Applications that use OAuth can store refresh tokens and access tokens securely with go-keyring, reducing the risk of token theft or misuse.
+
+**Benefit:** Enables seamless re-authentication flows without exposing sensitive tokens in plain files or environment variables.
+
+---
+
+### 4. Automated Scripts and Daemons with Secret Needs
+Scripts that automate workflows—such as syncing files, backing up databases, or triggering deployments—often require credentials with limited visibility.
+
+**Benefit:** go-keyring allows these tools to safely access necessary secrets without embedding them directly in code or configuration files.
+
+---
+
+### 5. Testing and Development Environments
+Developers can use the mock provider in go-keyring to simulate keyring operations during testing. This accelerates development without requiring a real keyring backend.
+
+```go
+keyring.MockInit()
+err := keyring.Set("test-service", "tester", "test-password")
+if err != nil {
+    log.Fatal(err)
+}
+secret, err := keyring.Get("test-service", "tester")
+if err != nil {
+    log.Fatal(err)
+}
+log.Println("Mocked secret:", secret)
+```
+
+**Benefit:** Easily test secret management logic without affecting actual system keyrings.
+
+---
+
+## Why Use go-keyring for Your Use Case?
+- **Cross-Platform Compatibility:** Supports macOS, Linux/BSD (via dbus), and Windows without code changes.
+- **Native Security:** Uses OS keyrings ensuring secrets reside safely in trusted storage.
+- **Simple API:** Minimal and consistent interface abstracts underlying platform complexity.
+- **No C Dependencies:** Designed for statically linked binaries common in CLI tools and standalone apps.
+
+---
+
+## Recommendations & Best Practices
+
+- **Use meaningful service and user identifiers:** Organize your secrets logically using service and username keys.
+- **Avoid storing overly large secrets:** Platform-imposed size limits exist; keep secrets concise.
+- **Test with the mock provider:** Use the built-in mock provider to validate your integration without requiring real keyring access.
+- **Handle errors gracefully:** Always check for and handle `ErrNotFound` to provide clear user feedback.
+
+---
+
+## Troubleshooting Common Scenarios
+
+<AccordionGroup title="Troubleshooting Common Issues">
+<Accordion title="I can't find the default 'login' keyring on Linux">
+On many Linux distributions, the default keyring collection in GNOME Keyring is named 'login'. If it doesn't exist, you can create it with Seahorse:
+
+- Open `seahorse` (Passwords and Keys application).
+- Go to **File > New > Password Keyring**.
+- Name the keyring exactly: `login`.
+
+This ensures go-keyring can connect and store your secrets.
+</Accordion>
+
+<Accordion title="go-keyring returns ErrNotFound when getting a secret">
+This error means the secret does not exist for the specified service and user combination. Make sure you have stored the secret first using `Set` before trying to retrieve it.
+
+Check your service and username strings for typos.
+</Accordion>
+
+<Accordion title="Data length errors when storing secrets">
+go-keyring enforces size limits depending on OS. On macOS and Windows, data that's too large will fail. Limit secret sizes:
+
+- macOS combined service, username, and password should be under ~3000 bytes.
+- Windows password must not exceed 2560 bytes.
+
+If you need to store larger sensitive data, consider alternative secure storage mechanisms.
+</Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+Ready to see go-keyring in action? Head to the [Quickstart: Set and Get Your First Secret](/getting-started/usage-validation/quickstart-example) to begin.
+
+Explore the [Core Features & Benefits](/overview/product-intro-core-concepts/features-and-benefits) to understand the API capabilities in depth.
+
+When you're integrating, check [Platform Integration & Dependencies](/overview/architecture-usecases-integration/platform-integration) for environment-specific setup notes.
+
+
+---

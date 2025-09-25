@@ -1,0 +1,248 @@
+---
+title: "Troubleshooting OS-Specific Issues"
+description: "Address common problems and platform-specific considerations when running go-keyring on macOS, Linux/BSD, and Windows. This guide helps diagnose dependency issues, DBus setup on Linux, and usage of internal tools like Seahorse for keyring management."
+---
+
+# Troubleshooting OS-Specific Issues
+
+This guide helps you diagnose and resolve common platform-specific problems when using **go-keyring** on macOS, Linux/BSD, and Windows. You'll find practical advice on dependency verification, environment setups like DBus on Linux, and tips on using internal tools such as Seahorse to manage your keyrings.
+
+---
+
+## 1. Overview
+
+**Purpose:**
+This guide addresses typical issues encountered when running `go-keyring` across different operating systems. It focuses on troubleshooting platform-specific dependencies and setup concerns.
+
+**What You'll Achieve:**
+- Identify and fix missing or misconfigured dependencies on macOS, Linux/BSD, and Windows.
+- Understand how to verify your environment and keyring backend.
+- Use platform tools like Seahorse on Linux/BSD to manage keyrings.
+
+**Estimated Time:** 10-20 minutes to diagnose and resolve common issues.
+
+**Difficulty Level:** Beginner to Intermediate.
+
+---
+
+## 2. Platform-Specific Troubleshooting
+
+### macOS
+
+`go-keyring` relies on the native **`/usr/bin/security`** tool to interact with the macOS keychain.
+
+#### Common Issues
+- **`/usr/bin/security` Missing or Unavailable**
+  - Verify the binary exists by running:
+  ```bash
+  ls -l /usr/bin/security
+  ```
+  - If missing, macOS system integrity may be compromised or the environment is unusual.
+
+- **Permission Denied or Access Errors**
+  - Check app permissions for accessing the keychain.
+  - Your Go application must run in a context where keychain access is permitted.
+
+#### Verification Steps
+1. Run a test command to search for a generic password:
+   ```bash
+   security find-generic-password -s your-service -a your-username
+   ```
+2. Confirm no errors are returned.
+
+#### Tips
+- `go-keyring` hex or base64 encodes multi-line or non-ASCII passwords before storing to avoid corruption on retrieval.
+- Password size is limited (~3000 bytes combined for service, username, password).
+
+---
+
+### Linux/BSD
+
+On Linux and BSD systems, the library uses the **Secret Service API** over **DBus**, typically provided by **GNOME Keyring** or compatible services.
+
+#### Common Issues
+- **DBus Service Not Running or Misconfigured**
+  - Ensure DBus daemon is active:
+    ```bash
+    systemctl status dbus
+    ```
+  - Restart if necessary:
+    ```bash
+    systemctl restart dbus
+    ```
+
+- **GNOME Keyring or Secret Service Not Installed or Disabled**
+  - Check if `gnome-keyring-daemon` or similar is running:
+    ```bash
+    ps aux | grep gnome-keyring
+    ```
+  - Install missing components:
+    ```bash
+    sudo apt-get install gnome-keyring
+    ```
+
+- **Default Collection `login` Missing**
+  - This collection is the expected keyring store.
+  - Use **Seahorse** to create it if absent:
+    1. Launch Seahorse (`seahorse` command or find "Passwords" in your desktop environment).
+    2. Go to **File > New > Password Keyring**.
+    3. Follow prompts and name it exactly **login**.
+
+- **Unlock Failures**
+  The library attempts to unlock collections as part of operations. If unlocking fails, secrets won't be accessible.
+  - Make sure your keyring is unlocked (you may need to enter your password in Seahorse).
+
+#### Verification Steps
+1. Test using Seahorse GUI that the `login` keyring exists and is unlocked.
+2. Validate DBus is responsive:
+   ```bash
+   dbus-send --session --dest=org.freedesktop.secrets --type=method_call --print-reply /org/freedesktop/secrets org.freedesktop.DBus.Introspectable.Introspect
+   ```
+3. Use `go-keyring` APIs programmatically to set and get a test secret.
+
+#### Tips
+- Avoid overly large secrets (>100KiB) due to performance.
+- If problems persist, restart your session or consider rebooting.
+
+---
+
+### Windows
+
+On Windows, `go-keyring` integrates with the **Windows Credential Manager** via the `wincred` library.
+
+#### Common Issues
+- **API Call Failures or `ErrNotFound` When Secrets Should Exist**
+  - Ensure your Windows user context has rights to manage credentials.
+  - Check credentials in the Credential Manager UI:
+    - Open **Credential Manager** via Control Panel.
+    - Look under **Windows Credentials** for entries matching your service.
+
+- **Password or Service Size Limitations**
+  - Password length limit: 2560 bytes
+  - Service string length limit is effectively below 32 KiB
+  - Exceeding these limits triggers `ErrSetDataTooBig`.
+
+#### Verification Steps
+1. Open Credential Manager and visually confirm secrets.
+2. Use a minimal Go program to `Set` and `Get` a secret, handling errors carefully.
+
+#### Tips
+- Structure service names to avoid collisions (e.g., prefix with your app name).
+- Avoid very large secrets to ensure compatibility.
+
+---
+
+## 3. General Troubleshooting Tips
+
+- **Unexpected `ErrNotFound` Errors**
+  - Verify service and user names exactly match in Set/Get/Delete calls.
+  - Confirm keyring collections or credentials exist in your platform's keyring tool.
+
+- **Handling `ErrSetDataTooBig`**
+  - Reduce secret size, service, or username length.
+  - On macOS, total size should be under 3 KB approximately.
+  - On Windows, stay within documented limits for service and password.
+
+- **Permissions and Access Denied**
+  - Ensure your application has the necessary OS-level privileges.
+  - On Linux, confirm your session is unlocked and DBus permissions are correct.
+  - On macOS, check keychain access control and app sandboxing.
+
+- **Check Go Version Compatibility**
+  - Use a supported Go version that matches `go-keyring` dependencies.
+
+- **Use Mock Provider for Further Testing**
+  - If environment issues persist and you want to isolate your application logic, enable the [mock provider](https://docs.go-keyring.io/api-reference/platform-and-testing-apis/mock-provider) with `keyring.MockInit()`.
+
+---
+
+## 4. Tools and Commands to Help Diagnose
+
+<AccordionGroup title="Diagnostic Commands and Tools">
+<Accordion title="macOS">
+```bash
+# Verify security tool
+ls -l /usr/bin/security
+
+# Manually find a password
+security find-generic-password -s your-service -a your-username
+```
+</Accordion>
+<Accordion title="Linux/BSD">
+```bash
+# Check DBus status
+systemctl status dbus
+
+# Restart DBus if necessary
+sudo systemctl restart dbus
+
+# Check if GNOME Keyring daemon is running
+ps aux | grep gnome-keyring
+
+# Use Seahorse to manage keyring
+seahorse
+
+# DBus Secret Service test
+ dbus-send --session --dest=org.freedesktop.secrets \
+  --type=method_call --print-reply /org/freedesktop/secrets \
+  org.freedesktop.DBus.Introspectable.Introspect
+```
+</Accordion>
+<Accordion title="Windows">
+```powershell
+# Open Credential Manager
+control /name Microsoft.CredentialManager
+
+# Use PowerShell to list credentials (example)
+Get-StoredCredential
+```
+</Accordion>
+</AccordionGroup>
+
+---
+
+## 5. Best Practices to Avoid Issues
+
+- Always use consistent, immutable service and username strings.
+- Avoid excessively large secrets.
+- Confirm backend dependencies are installed (e.g., security on macOS, DBus + Secret Service on Linux).
+- Use Seahorse or system tools to view and manage stored secrets outside of your app.
+- Handle errors explicitly, especially `ErrNotFound` and `ErrSetDataTooBig`.
+- For testing and CI environments, prefer the mock keyring implementation to avoid environmental issues.
+
+---
+
+## 6. Troubleshooting Example Scenario
+
+### Scenario:
+You run `keyring.Get("myapp", "user1")` on Linux and receive an error.
+
+### Diagnosis Steps:
+1. Confirm DBus daemon is running:
+   ```bash
+   systemctl status dbus
+   ```
+2. Confirm GNOME Keyring is running:
+   ```bash
+   ps aux | grep gnome-keyring
+   ```
+3. Open Seahorse and check that the "login" keyring is unlocked and contains your secret.
+4. If the keyring is locked or does not exist, create or unlock it following the instructions above.
+5. Retry your application after the keyring is unlocked.
+
+---
+
+## 7. Additional Resources
+
+- [Official go-keyring GitHub Repository](https://github.com/zalando/go-keyring) for source and issues.
+- [Seahorse Documentation](https://wiki.gnome.org/Apps/Seahorse) for managing Linux keyrings.
+- [Windows Credential Manager Documentation](https://support.microsoft.com/en-us/windows/credential-manager-in-windows-49dd2f74-5956-44fc-bf5d-2bf712156208).
+- Related Documentation:
+  - [Platform Integration & Dependencies](./overview/architecture-usecases-integration/platform-integration)
+  - [Mock Provider for Testing](./api-reference/platform-and-testing-apis/mock-provider)
+  - [Error Handling and Status Codes](./api-reference/platform-and-testing-apis/error-handling)
+  - [Troubleshooting & Common Setup Issues](./getting-started/usage-validation/troubleshooting)
+
+---
+
+This guidance empowers you to diagnose and resolve the most frequent OS-specific issues swiftly, ensuring a smooth experience integrating secure secret storage in your Go applications using `go-keyring`.

@@ -1,0 +1,225 @@
+---
+title: "Quickstart: Set and Get Your First Secret"
+description: "Follow a hands-on example for setting and getting a credential. Step-by-step walkthrough of sample code that demonstrates storing and retrieving secrets via go-keyring, covering both success and common failure scenarios."
+---
+
+# Quickstart: Set and Get Your First Secret
+
+Welcome to your hands-on guide for managing your first secret with **go-keyring**. This walkthrough will guide you step-by-step on storing and retrieving a secret securely on your local system's native keyring using clear, practical code examples. By the end, you will confidently perform basic secret storage operations and understand how to handle common scenarios including error conditions.
+
+---
+
+## 1. Prerequisites: What You Need Before Starting
+
+- **Go environment setup**: Ensure Go is installed and configured on your system.
+- **Installed go-keyring package**: You must have `go-keyring` installed as described in [Installing go-keyring](../../getting-started/setup-basics/installation).
+- **Operating system support**: Supported platforms include macOS, Linux/BSD (with Secret Service), and Windows.
+- **Configured environment**: Confirm your native keyrings or credential managers are accessible. See [Configuration and First Steps](../../getting-started/setup-basics/configuration) for platform-specific preparation.
+
+<Tip>
+Make sure you have permission to access your OS keyring backend, as some environments require user unlocking or additional setup.
+</Tip>
+
+---
+
+## 2. Basic Setup: Import and Prepare Your Go Project
+
+Create a new Go file (e.g., `main.go`) and import the `go-keyring` package:
+
+```go
+package main
+
+import (
+	"log"
+	"github.com/zalando/go-keyring"
+)
+
+func main() {
+	// Your code will go here
+}
+```
+
+---
+
+## 3. Step-by-Step: Setting and Getting a Secret
+
+### Step 3.1: Define Your Service, User, and Secret
+
+These string identifiers help organize secrets uniquely in the keyring.
+
+```go
+service := "my-app"
+user := "alice"
+password := "S3cur3P@ssw0rd!"
+```
+
+### Step 3.2: Store Your Secret in the Keyring
+
+Use the `Set` function to securely save the password.
+
+```go
+err := keyring.Set(service, user, password)
+if err != nil {
+	log.Fatalf("Failed to set secret: %v", err)
+}
+log.Println("Secret stored successfully")
+```
+
+<Tip>
+Passwords with multiple lines or non-ASCII characters are automatically encoded to ensure integrity across platforms.
+</Tip>
+
+### Step 3.3: Retrieve the Secret
+
+Use the `Get` function to retrieve your stored password.
+
+```go
+retrieved, err := keyring.Get(service, user)
+if err != nil {
+	log.Fatalf("Failed to get secret: %v", err)
+}
+log.Printf("Retrieved secret: %s", retrieved)
+```
+
+<Tip>
+If a secret is missing, `Get` returns the error `keyring.ErrNotFound`.
+</Tip>
+
+### Step 3.4: Run the Complete Example
+
+Here is the full Go program to set and get a secret:
+
+```go
+package main
+
+import (
+	"log"
+	"github.com/zalando/go-keyring"
+)
+
+func main() {
+	service := "my-app"
+	user := "alice"
+	password := "S3cur3P@ssw0rd!"
+
+	err := keyring.Set(service, user, password)
+	if err != nil {
+		log.Fatalf("Failed to set secret: %v", err)
+	}
+	log.Println("Secret stored successfully")
+
+	retrieved, err := keyring.Get(service, user)
+	if err != nil {
+		log.Fatalf("Failed to get secret: %v", err)
+	}
+	log.Printf("Retrieved secret: %s", retrieved)
+}
+```
+
+Run this program with:
+
+```bash
+go run main.go
+```
+
+---
+
+## 4. Understanding Success and Common Errors
+
+- **On success:** The secret is securely stored, and retrieved exactly as saved, even if it contains special or multiline content.
+- **Common error - `ErrNotFound`:** Occurs when no secret is stored under the provided service and user.
+- **Common error - `ErrSetDataTooBig`:** Returned if the secret exceeds platform-specific size limits (e.g., 3KB on macOS).
+
+<AccordionGroup title="Common Error Scenarios and Troubleshooting">
+<Accordion title="Error: secret not found (ErrNotFound)">
+This error means that either the secret was never stored or has been deleted for the specified service and user.
+
+**Action:** Confirm your identifiers are correct and that `Set` was called successfully before `Get`.
+</Accordion>
+
+<Accordion title="Error: data passed to Set was too big (ErrSetDataTooBig)">
+Some platforms limit the maximum size of secrets.
+
+- macOS ~3KB combined length
+- Windows password max ~2560 bytes
+
+**Action:** Reduce the secret length or split data into smaller secrets.
+</Accordion>
+
+<Accordion title="Platform-Specific Access Issues">
+On Linux/BSD, ensure your keyring daemon is running and the default collection `login` exists.
+
+**Tip:** Use Seahorse or your distribution’s keyring manager to check and unlock collections.
+</Accordion>
+</AccordionGroup>
+
+---
+
+## 5. Best Practices and Tips
+
+- Use meaningful `service` and `user` names for easy management.
+- Handle `ErrNotFound` specifically to detect missing secrets.
+- Protect access to your keyring on shared systems.
+- Use environment variables or config files to manage your service and user strings securely.
+- Use the `Delete` and `DeleteAll` APIs responsibly to manage secret lifecycle.
+
+---
+
+## 6. Next Steps
+
+- Explore other API operations such as [`Delete`](../../api-reference/core-keyring-apis/delete-secret) and [`DeleteAll`](../../api-reference/core-keyring-apis/delete-secret).
+- Learn about platform integration and preparations: [Platform Integration & Dependencies](../../overview/architecture-usecases-integration/platform-integration).
+- Read [Troubleshooting & Common Setup Issues](../../getting-started/usage-validation/troubleshooting) for resolving environment-specific problems.
+
+---
+
+## 7. Additional Resources
+
+- [Core Concepts & What is go-keyring?](../../overview/product-intro-core-concepts/what-is-go-keyring)
+- [Installation Instructions](../../getting-started/setup-basics/installation)
+- [Configuration and Parameter Choices](../../getting-started/setup-basics/configuration)
+
+---
+
+With this guide, you are ready to securely manage secrets using go-keyring across multiple platforms with confidence.
+
+We encourage you to build on this foundation by integrating secret management into your applications seamlessly.
+
+---
+
+## Troubleshooting Quick Reference
+
+<AccordionGroup title="Troubleshooting Quickstart Issues">
+<Accordion title="Cannot retrieve secret: ErrNotFound">
+- Confirm you have run `Set` successfully prior to `Get`.
+- Verify `service` and `user` values are identical.
+- Check OS keyring status and permissions.
+</Accordion>
+
+<Accordion title="Set operation fails due to data size">
+- Verify password and total service+user+password length.
+- Shorten your secret or break it into multiple keys.
+</Accordion>
+
+<Accordion title="On Linux, errors related to Secret Service">
+- Ensure DBus and GNOME Keyring are running.
+- Verify the `login` keyring collection exists and is unlocked.
+</Accordion>
+</AccordionGroup>
+
+
+---
+
+### Example Logs Expected From Successful Run
+
+```bash
+2024/06/27 12:00:00 Secret stored successfully
+2024/06/27 12:00:00 Retrieved secret: S3cur3P@ssw0rd!
+```
+
+
+---
+
+<Check>
+You're now set to store and retrieve your first secret with go-keyring successfully. For deeper integration, continue with the rest of the getting started series!
+</Check>

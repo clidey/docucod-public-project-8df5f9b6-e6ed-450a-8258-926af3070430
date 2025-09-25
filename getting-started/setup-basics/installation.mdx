@@ -1,0 +1,216 @@
+---
+title: "Installing go-keyring"
+description: "Learn how to add go-keyring to your Go project using standard Go tools. Includes installation commands, version notes, and platform-specific caveats so you can set up confidently."
+---
+
+# Installing go-keyring
+
+Learn how to add go-keyring to your Go project using standard Go tools. This guide covers installation commands, version notes, and platform-specific caveats so you can set up confidently.
+
+---
+
+## 1. Prerequisites & Supported Platforms
+
+Before installing go-keyring, ensure your environment meets the following prerequisites:
+
+- **Supported Operating Systems:**
+  - macOS
+  - Linux and BSD (with DBus and Secret Service API support, e.g., GNOME Keyring)
+  - Windows
+
+- **System Dependencies:**
+  - macOS: The `/usr/bin/security` binary must be available (default on macOS).
+  - Linux/BSD: Secret Service DBus interface, typically provided by GNOME Keyring.
+    - Make sure the default `login` keyring exists. If not, create one with tools like Seahorse.
+  - Windows: Uses Windows Credential Manager; no extra dependencies needed.
+
+- **Go Environment:**
+  - Go modules enabled or GOPATH setup.
+  - Compatible Go version (generally Go 1.13+ recommended).
+
+- **Network:**
+  - No special network access required for installing or running go-keyring.
+
+<Tip>
+If you are on Linux/BSD and do not have the `login` collection in your keyring, create it using Seahorse:
+
+1. Open Seahorse.
+2. Select **File > New > Password Keyring**.
+3. Name the keyring **login**.
+4. Save and restart your session if necessary.
+</Tip>
+
+---
+
+## 2. Installation Instructions
+
+Adding go-keyring to your Go project is straightforward using the `go get` command.
+
+### Step 1: Add the go-keyring module
+
+Open a terminal and run:
+
+```bash
+// For Go modules enabled
+go get github.com/zalando/go-keyring@latest
+```
+
+This fetches the latest version of go-keyring and adds it to your project's `go.mod` file.
+
+### Step 2: Verify installation
+
+Run the following command to confirm the module is correctly downloaded:
+
+```bash
+go list -m github.com/zalando/go-keyring
+```
+
+Expected output:
+
+```
+github.com/zalando/go-keyring vX.Y.Z
+```
+
+where `vX.Y.Z` is the installed version number.
+
+<Tip>
+Use `go get github.com/zalando/go-keyring@vX.Y.Z` to install a specific version if needed.
+</Tip>
+
+### Common Pitfall
+
+Ensure your Go environment supports modules (`GO111MODULE=on`) or you are in a module-enabled workspace to avoid dependency resolution issues.
+
+---
+
+## 3. Platform-Specific Considerations
+
+### macOS
+
+- Uses the native OS X Keychain through the `/usr/bin/security` command.
+- Passwords are encoded in base64 to avoid corruption of multi-line or non-ASCII data.
+- Data size limits: Combined service, username, and password should not exceed approximately 3000 bytes.
+
+### Linux / BSD
+
+- Uses Secret Service DBus interface backing onto system keyring implementations like GNOME Keyring.
+- Requires an active DBus session and the default `login` keyring.
+- There are no strict size limits but storing extremely large secrets (>100KiB) can degrade performance.
+
+### Windows
+
+- Uses Windows Credential Manager via the Windows API.
+- Passwords limited to 2560 bytes.
+- Service names limited to approximately 30 KB (with practical limits below that).
+
+<Warning>
+If your data exceeds platform limits, the `Set` operation will return an error `ErrSetDataTooBig`. Adjust your secret size accordingly.
+</Warning>
+
+---
+
+## 4. Example: Adding go-keyring and Setting Your First Secret
+
+Create a simple Go program to test go-keyring installation:
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    "github.com/zalando/go-keyring"
+)
+
+func main() {
+    service := "my-app"
+    user := "example-user"
+    password := "super-secret-password"
+
+    // Store the secret
+    if err := keyring.Set(service, user, password); err != nil {
+        log.Fatalf("Failed to set secret: %v", err)
+    }
+
+    // Retrieve the secret
+    secret, err := keyring.Get(service, user)
+    if err != nil {
+        log.Fatalf("Failed to get secret: %v", err)
+    }
+
+    fmt.Printf("Retrieved secret: %s\n", secret)
+}
+```
+
+Build and run your program:
+
+```bash
+go run main.go
+```
+
+Expected output:
+
+```
+Retrieved secret: super-secret-password
+```
+
+---
+
+## 5. Verification & Common Troubleshooting
+
+### Verification Steps
+
+1. Run your test program as above to confirm successful `Set` and `Get` operations.
+2. Check for any error messages indicating missing dependencies or permission issues.
+
+### Troubleshooting Tips
+
+<AccordionGroup title="Common Issues and Solutions">
+<Accordion title="Set Data Too Big Error">
+
+If you receive an `ErrSetDataTooBig` error:
+
+- Ensure your password and combined data length respects platform limits (refer to section 3).
+- Try reducing secret length or splitting data.
+
+</Accordion>
+<Accordion title="Missing Keyring or DBus Session on Linux">
+
+- Confirm GNOME Keyring or alternative Secret Service DBus provider is running.
+- Ensure DBus session bus is active (`echo $DBUS_SESSION_BUS_ADDRESS`).
+- If missing, start your keyring daemon or re-login.
+
+</Accordion>
+<Accordion title="Operation Not Found Errors">
+
+- Verify you have access permissions to the system keyring.
+- On macOS, ensure your user keychain is unlocked.
+- On Windows, verify your user credentials allow access.
+
+</Accordion>
+</AccordionGroup>
+
+---
+
+## 6. Next Steps
+
+- Explore the [Quickstart: Set and Get Your First Secret](https://docs.example.com/getting-started/usage-validation/quickstart-example) guide for more usage patterns.
+- Visit [Platform Integration & Dependencies](https://docs.example.com/overview/architecture-usecases-integration/platform-integration) to understand OS-level requirements and configurations.
+- Use [Testing and Mocking for Local Validation](https://docs.example.com/getting-started/usage-validation/mock-validation) to simulate keyring functionality during development.
+
+---
+
+## 7. Additional Resources
+
+- Official GitHub Repository: [https://github.com/zalando/go-keyring](https://github.com/zalando/go-keyring)
+- API Documentation: Use `go doc github.com/zalando/go-keyring` or visit the GoDoc page.
+
+---
+
+For any issues or contributions, please refer to the repository's CONTRIBUTING.md and security contact list.
+
+---
+
+<Check>
+You have successfully installed go-keyring and performed your first secret storage operation. You are now ready to integrate secure secret management into your Go applications!
+</Check>

@@ -1,0 +1,254 @@
+---
+title: "Testing and Mocking for Local Validation"
+description: "Learn how to use go-keyring’s in-memory mock to test and validate basic flows without relying on system keyring support. Includes guidance for enabling and using the mock provider, especially useful in CI or unsupported environments."
+---
+
+# Testing and Mocking for Local Validation
+
+This guide explains how to leverage go-keyring's in-memory mock provider to test and validate your secret management logic locally without relying on the OS-native keyring support. Using the mock provider enables reliable tests in continuous integration (CI) environments, unsupported platforms, or during early development when a system keyring is unavailable.
+
+---
+
+## Why Use the Mock Provider?
+
+When writing automated tests or local validation scripts for applications that use go-keyring, depending on the actual OS keyring can introduce environment-specific failures or complexities. For example, CI pipelines often lack a full desktop environment with native keyring services available.
+
+The mock provider offers an in-memory keyring simulation that:
+
+- Stores secrets temporarily in your test memory space.
+- Mimics real keyring behavior with `Set`, `Get`, and `Delete` methods.
+- Throws errors consistent with real scenarios, such as "secret not found".
+- Can be configured to simulate errors for testing failure handling.
+
+This allows you to test your application's keyring integration with confidence and speed.
+
+---
+
+## 1. Enabling the Mock Provider
+
+Before running any keyring operations in your tests or local validation, call the `MockInit()` function to replace the default OS provider with the mock in-memory provider.
+
+```go
+import "github.com/zalando/go-keyring"
+
+func init() {
+    keyring.MockInit()
+}
+```
+
+Alternatively, for testing error handling, you can initialize the mock with a forced error:
+
+```go
+import (
+    "errors"
+    "github.com/zalando/go-keyring"
+)
+
+func init() {
+    errToSimulate := errors.New("forced mock error")
+    keyring.MockInitWithError(errToSimulate)
+}
+```
+
+
+<Tip>
+Always call `MockInit()` early in your test setup to ensure your tests do not hit platform-dependent code.
+</Tip>
+
+---
+
+## 2. Using the Mock Provider in Tests
+
+Once enabled, all calls to the `keyring.Set()`, `keyring.Get()`, and `keyring.Delete()` functions operate against an in-memory store isolated from the system.
+
+Here is a practical example test verifying basic set-get-delete functionality:
+
+```go
+package yourpackage_test
+
+import (
+    "testing"
+    "github.com/zalando/go-keyring"
+)
+
+func TestMockKeyringOperations(t *testing.T) {
+    keyring.MockInit()
+
+    service := "test-service"
+    user := "test-user"
+    password := "secret-password"
+
+    // Set a secret
+    err := keyring.Set(service, user, password)
+    if err != nil {
+        t.Fatalf("Failed to set secret: %v", err)
+    }
+
+    // Retrieve the secret
+    got, err := keyring.Get(service, user)
+    if err != nil {
+        t.Fatalf("Failed to get secret: %v", err)
+    }
+    if got != password {
+        t.Errorf("Expected password '%s', got '%s'", password, got)
+    }
+
+    // Delete the secret
+    err = keyring.Delete(service, user)
+    if err != nil {
+        t.Fatalf("Failed to delete secret: %v", err)
+    }
+
+    // Confirm deletion
+    _, err = keyring.Get(service, user)
+    if err != keyring.ErrNotFound {
+        t.Errorf("Expected ErrNotFound after delete, got %v", err)
+    }
+}
+```
+
+This test ensures that the mock keyring behaves consistently with the expected interface.
+
+---
+
+## 3. Advanced Mock Capabilities
+
+### Simulating Errors
+
+For testing your application’s error handling, the mock provider can simulate failure for all operations. Initialize with an error:
+
+```go
+keyring.MockInitWithError(errors.New("simulated failure"))
+```
+
+All subsequent `Set`, `Get`, and `Delete` calls will return this error.
+
+### Deleting All Secrets in Mock
+
+The mock provider supports `DeleteAll(service string)` which removes all secrets stored under a given service. It's useful to clean test state between runs.
+
+Example usage:
+
+```go
+err := keyring.DeleteAll("test-service")
+if err != nil {
+    t.Fatalf("Failed to delete all secrets: %v", err)
+}
+```
+
+---
+
+## 4. Best Practices and Tips
+
+- **Always isolate your tests** using `MockInit()` to avoid unintended system keyring access during CI runs.
+- **Use `MockInitWithError()` to validate error recovery paths** in your application.
+- **Clear mock data between tests** by calling `DeleteAll(service)` where applicable.
+- **Do not rely on mock behavior for production**; it only exists for testing and debugging.
+
+<Warning>
+The mock provider stores secrets only in memory during runtime. When your application shuts down, all stored secrets are lost. For production use, rely on the native OS keyring.
+</Warning>
+
+---
+
+## 5. Troubleshooting Common Issues
+
+<AccordionGroup title="Mock Provider Troubleshooting">
+<Accordion title="Mock Secret Not Found">
+If `Get` returns `ErrNotFound`, verify that:
+- You called `Set` successfully before `Get`.
+- The correct service and user strings are used consistently.
+- No reset of the mock provider occurred between calls.
+</Accordion>
+
+<Accordion title="Unexpected Errors While Using Mock">
+If all calls start returning a custom error, make sure you did not initialize the mock using `MockInitWithError` unintentionally.
+
+Reset to normal mock behavior with a fresh call to `MockInit()`.
+</Accordion>
+
+<Accordion title="Test Failures in CI Environment">
+Ensure your tests call `MockInit()` or `MockInitWithError()` explicitly at the start. Without this, tests might fail in environments lacking native keyring support.
+</Accordion>
+</AccordionGroup>
+
+---
+
+## 6. Reference to Real-World Usage
+
+The mock provider infrastructure is exercised internally by the go-keyring test suite to guarantee correctness. For example, here's a summarized workflow from the tests:
+
+- Set multiple secrets under a service.
+- Retrieve and validate secrets.
+- Delete single secrets or all secrets for the service.
+- Simulate error scenarios with forced error injection.
+
+This ensures users experience native-like behavior during local validations.
+
+---
+
+## 7. Additional Resources
+
+- [API Reference: Mock Provider](https://github.com/zalando/go-keyring/blob/main/keyring_mock.go) — source code and details for the mock provider.
+- [Quickstart: Set and Get Your First Secret](/getting-started/usage-validation/quickstart-example) — for practical first steps with go-keyring.
+- [Platform Integration & Dependencies](/overview/architecture-usecases-integration/platform-integration) — for understanding native OS keyring requirements.
+- [Troubleshooting & Common Setup Issues](/getting-started/usage-validation/troubleshooting) — fix environment-related problems.
+
+---
+
+By leveraging the mock provider included with go-keyring, you can confidently develop and test your applications’ secret management in controlled, fast, and repeatable ways—without needing a native keyring environment.
+
+
+---
+
+<Card title="Example: Using Mock Provider in Test">
+```go
+import (
+    "testing"
+    "github.com/zalando/go-keyring"
+)
+
+func TestMockBehavior(t *testing.T) {
+    keyring.MockInit()
+
+    err := keyring.Set("my-service", "alice", "hunter2")
+    if err != nil {
+        t.Fatal(err)
+    }
+
+    pw, err := keyring.Get("my-service", "alice")
+    if err != nil {
+        t.Fatal(err)
+    }
+
+    if pw != "hunter2" {
+        t.Errorf("Expected 'hunter2', got '%s'", pw)
+    }
+
+    if err := keyring.Delete("my-service", "alice"); err != nil {
+        t.Fatal(err)
+    }
+}
+```
+</Card>
+
+
+---
+
+## 8. Summary Diagram: Mock Provider in Go Keyring Workflow
+
+```mermaid
+flowchart TD
+  A[Initialize Mock Provider with MockInit()] --> B[Set(service, user, password) stored in memory]
+  B --> C[Get(service, user) retrieves secret from memory]
+  C --> D[Delete(service, user) removes secret from memory]
+  D --> E[DeleteAll(service) removes all secrets for service]
+  E --> F[Simulate errors using MockInitWithError(err)]
+
+  classDef normal fill:#e0f7fa,stroke:#00796b,stroke-width:1px;
+  classDef error fill:#ffebee,stroke:#c62828,stroke-width:2px;
+  class A,B,C,D,E normal
+  class F error
+```
+
+---

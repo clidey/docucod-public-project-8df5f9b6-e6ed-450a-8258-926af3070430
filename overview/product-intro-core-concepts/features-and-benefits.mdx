@@ -1,0 +1,148 @@
+---
+title: "Core Features & Benefits"
+description: "Overview of the major features: cross-platform support (macOS, Linux/BSD, Windows), statically linked binary friendliness, and first-class secret management APIs. Highlights practical benefits such as eliminating user re-authentication, secure local storage, and simplified development workflows."
+---
+
+# Core Features & Benefits of go-keyring
+
+## Unlock Seamless, Secure Credential Management Across Platforms
+
+go-keyring offers developers a unified, hassle-free way to store, retrieve, and manage secrets locally using the native OS keyring services on **macOS**, **Linux/BSD**, and **Windows**. This cross-platform approach ensures your applications can securely handle sensitive credentials without forcing users to re-authenticate repeatedly or rely on custom encryption solutions.
+
+### Why go-keyring? Key Benefits at a Glance
+- **Cross-Platform Compatibility:** Write your secret management code once and run it anywhere—macOS (using the system keychain), Linux/BSD (via DBus and GNOME Keyring), and Windows (with Credential Manager) are fully supported.
+- **Statically Linked Binary Friendly:** Unlike many libraries relying on C bindings, go-keyring is built to be friendly to statically linked Go binaries, simplifying deployment and avoiding common runtime dependencies.
+- **Simple, Intuitive API:** Focus on what matters—storing and retrieving secrets—using an easy-to-understand API that abstracts away platform-specific complexity.
+- **Native Security:** Secrets are stored using the system’s trusted secure storage, leveraging OS-level protections and user authentication, eliminating the need to reinvent security mechanisms.
+- **Flexible Secret Operations:** Beyond basic set/get, the library supports deleting individual secrets or purging all secrets for a service, providing full control over stored credentials.
+
+---
+
+## Core Features Explained
+
+### 1. Cross-Platform Secret Storage
+- **macOS:** Interacts with the native keychain via the built-in `/usr/bin/security` command, securely handling secrets with automatic base64 encoding for complex or multiline data.
+- **Linux/BSD:** Uses the Secret Service API over DBus (commonly GNOME Keyring) to store and manage secrets in a centralized, encrypted keyring.
+- **Windows:** Integrates with Windows Credential Manager, storing secrets safely and ensuring compliance with platform size and security limits.
+
+> This native integration means secrets are protected leveraging the OS’s strongest security capabilities instead of relying on custom encryption.
+
+### 2. Simple Yet Powerful API
+- **Set(service, user, password):** Store a secret linked to a service and user.
+- **Get(service, user):** Retrieve the secret securely.
+- **Delete(service, user):** Remove a specific secret.
+- **DeleteAll(service):** Wipe all secrets for a given service key.
+
+#### Example: Basic Set and Get
+```go
+package main
+
+import (
+    "log"
+    "github.com/zalando/go-keyring"
+)
+
+func main() {
+    service := "my-app"
+    user := "alice"
+    password := "s3cr3tP@ssw0rd"
+
+    // Store the secret securely
+    if err := keyring.Set(service, user, password); err != nil {
+        log.Fatal(err)
+    }
+
+    // Retrieve it anywhere it's needed
+    secret, err := keyring.Get(service, user)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    log.Printf("Retrieved secret: %s", secret)
+}
+```
+
+### 3. Secure Handling of Complex Secrets
+The library automatically encodes multiline or non-ASCII passwords (e.g., base64 on macOS), ensuring secrets are reliably stored and retrieved without corruption, regardless of content.
+
+### 4. Robust Delete Operations
+Remove secrets individually or bulk-delete all credentials for a service, enabling secure clean-up of sensitive data during logout flow or credential rotation.
+
+### 5. Support for Mocking and Testing
+A built-in mock provider lets you simulate keyring behavior in tests without requiring access to a real keyring environment, significantly easing CI/CD and local validation.
+
+---
+
+## Real-World Benefits and Use Cases
+
+### Eliminate Re-Authentication Hassles
+If your CLI or GUI application interacts with APIs that require credentials, use go-keyring to remember authenticated sessions securely and silently, avoiding repeated password prompts.
+
+### Simplified Development & Deployment
+No need to write platform-specific secret storage logic or bundle complex dependencies; go-keyring’s clean API and static binary support let you focus on delivering features.
+
+### Protect Sensitive User Data Locally
+By leveraging native OS secure storage, users’ secrets never leave their machines unprotected, lowering your risk in data breaches and compliance requirements.
+
+### Support for a Wide Range of Applications
+From command-line tools to desktop apps and scripts, go-keyring fits into any workflow that needs local secret management with minimal friction.
+
+---
+
+## Best Practices and Tips
+
+- **Service Naming:** Use consistent and descriptive service names to categorize secrets logically (e.g., `myapp-auth`, `myapp-db`).
+- **User Identifiers:** Clearly define user strings if you support multiple identities per service.
+- **Secret Size Limits:** Avoid excessively large secrets; macOS and Windows platforms enforce data size limits (e.g., Windows passwords capped at 2560 bytes).
+- **Unlock Keyrings Before Use:** On Linux/BSD, ensure the default `login` keyring exists and is unlocked, typically managed via your desktop environment.
+- **Handle ErrNotFound Gracefully:** Operations like `Get` and `Delete` return this error if secrets don’t exist—plan your app’s logic accordingly.
+
+<Warning>
+Attempting to store oversized secrets on macOS or Windows will result in an error. Design your credentials or tokens to fit within these platform limits.
+</Warning>
+
+<Tip>
+In automated tests, initialize the mock provider with `keyring.MockInit()` to seamlessly test secret operations without external dependencies.
+</Tip>
+
+---
+
+## Underlying Workflow
+
+```mermaid
+flowchart TD
+    A[Start] --> B{Is Secret Already Stored?}
+    B -- No --> C[Call keyring.Set(service, user, password)]
+    B -- Yes --> D[Call keyring.Get(service, user)]
+    D --> E{Use Secret in Your Application}
+    C --> E
+    E --> F{Need to Delete Secret?}
+    F -- Yes --> G[Call keyring.Delete(service, user)]
+    F -- No --> H[Continue Normal Execution]
+    G --> H
+```
+
+This straightforward flow highlights how go-keyring fits naturally into any credential lifecycle.
+
+---
+
+## Conclusion
+go-keyring empowers your Go applications with secure, cross-platform secret management without friction or overhead. By leveraging native OS keyrings and providing an easy API, it helps you build secure user experiences that respect privacy and simplify authentication.
+
+---
+
+## Next Steps
+- Explore the [What is go-keyring?](./what-is-go-keyring) page for foundational understanding.
+- Dive into [Quickstart: Set and Get Your First Secret](../../getting-started/usage-validation/quickstart-example) to see go-keyring in action.
+- Check out [Platform Integration & Dependencies](./platform-integration) to ensure environment readiness.
+
+
+
+---
+
+### References
+- GitHub Repository: [zalando/go-keyring](https://github.com/zalando/go-keyring)
+- Secret Service Specification: [freedesktop.org](https://specifications.freedesktop.org/secret-service-spec/latest/)
+
+
+
