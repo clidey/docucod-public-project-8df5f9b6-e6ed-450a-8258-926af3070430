@@ -1,0 +1,215 @@
+---
+title: "Troubleshooting & Common Setup Issues"
+description: "Resolve typical issues encountered during installation and first use, such as missing system dependencies, permissions errors, or unsupported keyring backends. Includes actionable steps for each major platform and pointers to diagnostic tips."
+---
+
+# Troubleshooting & Common Setup Issues
+
+This guide helps you quickly resolve the most frequent issues encountered during the installation and initial use of `go-keyring`. Whether you're missing key system dependencies, encountering permission errors, or dealing with unsupported keyring backends on your OS, follow these practical, platform-specific solutions to get `go-keyring` running smoothly.
+
+---
+
+## 1. Common Errors Explained
+
+Understanding the common errors will help you diagnose and fix issues faster.
+
+| Error                          | Meaning                                                            |
+|-------------------------------|--------------------------------------------------------------------|
+| `secret not found in keyring` | The requested secret was not found. Could be a missing entry or incorrect parameters.
+| `data passed to Set was too big` | The secret data size exceeds platform or backend limits.
+| `unsupported platform: <OS>`  | Go-keyring does not support your current OS or environment.
+| Permission errors             | Keyring service or OS denies access due to insufficient privileges.
+
+<Check>
+Ensure you have reviewed platform-specific prerequisites and system dependencies before troubleshooting errors.
+</Check>
+
+---
+
+## 2. Platform-Specific Troubleshooting
+
+### macOS
+
+#### Problem: Keychain Command Not Found or Fails
+
+- `go-keyring` depends on the native `/usr/bin/security` utility.
+- Verify it is available:
+
+```bash
+ls -l /usr/bin/security
+```
+
+- If missing, your OS installation may be corrupted or incomplete — reinstall or repair macOS.
+
+#### Problem: Permission or Access Denied Errors
+
+- Ensure your application or terminal process has access to your login keychain.
+- Use the **Keychain Access** app:
+  - Open **Keychain Access** (under Applications > Utilities).
+  - Confirm the `login` keychain is unlocked.
+  - Check for any security dialogs requiring approval.
+
+#### Problem: Data Too Big Error
+
+- macOS limits the combined size of service name, username, and password (~3000 bytes).
+- Split large secrets or store in multiple entries if applicable.
+
+<Warning>
+Do not manually delete keychain items unless you know their function; improper changes can lock you out.
+</Warning>
+
+---
+
+### Linux / BSD
+
+#### Problem: Keyring Backends Not Found or DBus Errors
+
+- `go-keyring` relies on Secret Service API over DBus, typically provided by **GNOME Keyring**.
+- Verify `gnome-keyring-daemon` is running:
+
+```bash
+ps aux | grep gnome-keyring-daemon
+```
+
+- If not running, start it manually or log in to a desktop session that initializes it automatically.
+
+#### Problem: Missing `login` Keyring
+
+- The default keyring collection named `login` must exist.
+- Create it using **Seahorse** (Passwords and Keys GUI):
+
+  1. Open `seahorse`
+  2. File > New > Password Keyring
+  3. Name it exactly `login`
+
+#### Problem: Permissions or DBus Session Unavailable
+
+- Your user session must support DBus communication.
+- For headless or minimal systems, ensure DBus and GNOME Keyring services are active.
+- If issues persist in server environments, look into running a mock keyring or alternative secret storage.
+
+<Info>
+For minimal environments or automated testing, consider using the mock provider by calling `keyring.MockInit()` in your Go tests or applications.
+</Info>
+
+---
+
+### Windows
+
+#### Problem: Secret Not Found or Access Denied
+
+- Windows uses **Credential Manager** via Windows APIs.
+- Ensure you are running with the same user context that initially saved the secret.
+- Some corporate policies or antivirus software may restrict access.
+
+#### Problem: Data Too Big Error
+
+- Passwords are limited to 2560 bytes; service names are restricted to around 30 KB.
+- Split data if necessary.
+
+#### Problem: Unable to Retrieve or Save Credentials
+
+- Restart your machine to ensure the Credential Manager service is running.
+- Run your terminal or app with elevated permissions if policies restrict storage.
+
+---
+
+## 3. General Troubleshooting Tips
+
+- **Verify your service and username strings:** Typos or mismatches cause “secret not found” errors.
+
+- **Check for invisible characters or encoding issues:** Non-ASCII or multiline secrets should be supported, but encoding mishandling might cause failures.
+
+- **Update `go-keyring` to the latest version:** Bug fixes and improvements are periodically released.
+
+- **Use mock initialization when testing:** This isolates code logic from environmental issues.
+
+- **Clear stale or corrupt entries:** If possible, delete the problematic secret and re-set it.
+
+- **Check logs and runtime error messages carefully:** They often pinpoint the root cause.
+
+---
+
+## 4. Diagnostic Commands & Verification
+
+### macOS
+
+```bash
+/usr/bin/security find-generic-password -s <service_name> -a <username>
+```
+- Checks if the secret is present in the keychain directly.
+
+### Linux
+
+```bash
+ps aux | grep gnome-keyring-daemon
+
+dbus-send --session --dest=org.freedesktop.secrets --type=method_call --print-reply \
+    /org/freedesktop/secrets org.freedesktop.Secret.Service.GetCollections
+```
+- Verifies keyring daemon and DBus interface availability.
+
+### Windows (PowerShell)
+
+```powershell
+Get-StoredCredential -Target "<service_name>:<username>"
+```
+- Use this if you have PowerShell Credential Manager module installed, or use Credential Manager UI.
+
+---
+
+## 5. Additional Resources & Support
+
+- [Platform Integration & Dependencies](https://example.com/overview/architecture-usecases-integration/platform-integration) — Deeper details on environment requirements.
+- [Installation Guide](https://example.com/getting-started/setup-basics/installation) — Setup instructions.
+- [Quickstart Guide](https://example.com/getting-started/usage-validation/quickstart-example) — To test your first secret operation.
+- GitHub Issues and Discussions at https://github.com/zalando/go-keyring for community help.
+
+<Note>
+If persistent issues arise related to environment or permissions, consult your OS documentation and security policies; keyring integration heavily relies on system-level services.
+</Note>
+
+---
+
+## 6. Summary
+
+| Step                      | Action                                      |
+|---------------------------|---------------------------------------------|
+| 1. Verify system dependencies and services.
+| 2. Check permissions, keyring access, and backend availability.
+| 3. Confirm input data size limits.
+| 4. Use diagnostic commands to inspect keyring contents.
+| 5. Clear or recreate keyrings if corrupted.
+| 6. Use mocked backend for test isolation.
+
+Following these steps ensures reliable setup and usage of `go-keyring` across all supported platforms.
+
+---
+
+## Example: Fixing Missing `login` Keyring on Linux
+
+```bash
+# Open Seahorse (GNOME Passwords and Keys GUI)
+seahorse &
+
+# Follow File > New > Password Keyring
+# Use name: login
+```
+
+Once created, restart your application or terminal session and retry `go-keyring` operations.
+
+## Example: Clearing a macOS Keychain Entry
+
+```bash
+/usr/bin/security delete-generic-password -s my-app -a anon
+```
+
+Then, reset your secret using your application.
+
+---
+
+For further assistance, always ensure to capture error outputs verbatim and consult the diagnostic sections above.
+
+---
+
+# End of Troubleshooting Guide
