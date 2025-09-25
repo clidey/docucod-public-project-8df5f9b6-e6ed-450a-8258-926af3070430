@@ -1,0 +1,200 @@
+---
+title: "Provider Overview"
+description: "Summarizes available platform providers (macOS, Windows, Linux/BSD via D-Bus) and the mechanism for provider selection. Lists capabilities, dependencies, and how the library adapts per operating system, ensuring robust cross-platform integration."
+---
+
+# Provider Overview
+
+This page summarizes the **platform-specific providers** integrated into the `go-keyring` library, detailing the three supported operating system environments—**macOS**, **Windows**, and **Linux/BSD (via D-Bus Secret Service)**—and explains how the library dynamically selects and interacts with each provider. Understanding the capabilities, dependencies, and underlying mechanisms of these providers allows you to effectively implement secure, native secret management in your Go applications across different platforms.
+
+---
+
+## Platform Providers Summary
+
+`go-keyring` abstracts secret storage and retrieval by using a **provider interface** that adapts automatically to your running OS environment. The following native providers are embedded:
+
+| Platform                 | Provider Implementation      | Mechanism                                   | Dependencies & Notes                         |
+|--------------------------|------------------------------|---------------------------------------------|----------------------------------------------|
+| **macOS**                | `macOSXKeychain`            | `/usr/bin/security` CLI interacting with the macOS Keychain | Relies on available `security` binary (default on macOS). Encodes secrets to handle multiline and special characters. |
+| **Windows**              | `windowsKeychain`           | Windows Credential Manager API via `wincred` package | Limited secret size constraints. Uses concatenation of service and username as credential identifier. |
+| **Linux/BSD (D-Bus)**    | `secretServiceProvider`     | Freedesktop Secret Service API (via D-Bus) using GNOME Keyring or compatible daemon | Requires running Secret Service with a default 'login' collection; depends on `github.com/godbus/dbus/v5`. |
+
+For unsupported systems, a fallback provider returns an error indicating lack of platform support.
+
+---
+
+## How Provider Selection Works
+
+When `go-keyring` initializes, it detects the host OS and sets the appropriate provider implementation through a Go build tag mechanism. Each provider exposes the same interface with methods for setting, getting, deleting secrets, and deleting all secrets for a given service.
+
+| Operating System       | File Implementing Provider         | Provider Set as Default                   |
+|-----------------------|-----------------------------------|------------------------------------------|
+| macOS                 | `keyring_darwin.go`                | `macOSXKeychain{}`                       |
+| Windows               | `keyring_windows.go`               | `windowsKeychain{}`                      |
+| Linux/BSD (with CGO)  | `keyring_unix.go`                  | `secretServiceProvider{}`                 |
+| Unsupported           | `keyring_fallback.go`              | `fallbackServiceProvider{}` (errors)    |
+
+This provider abstraction ensures you write uniform code against a consistent API while the library handles OS-specific complexities behind the scenes.
+
+---
+
+## Platform Provider Details and Capabilities
+
+### macOS Provider (`macOSXKeychain`)
+
+- Utilizes the native `security` CLI binary to interact with the macOS Keychain.
+- Secrets are encoded in Base64 and prefixed with `go-keyring-base64:` to handle multi-line secrets and non-ASCII characters transparently.
+- Limits:
+  - Combined input (service, username, password) size should not exceed ~3000 bytes, otherwise an `ErrSetDataTooBig` error is returned.
+- Secrets are stored, retrieved, and deleted via `security find-generic-password`, `add-generic-password`, and `delete-generic-password` commands.
+
+#### Example flow on macOS:
+
+```bash
+# Set a secret
+security add-generic-password -U -s "my-service" -a "my-user" -w "go-keyring-base64:<encoded-pw>"
+
+# Get a secret
+security find-generic-password -s "my-service" -wa "my-user"
+
+# Delete a secret
+security delete-generic-password -s "my-service" -a "my-user"
+```
+
+### Windows Provider (`windowsKeychain`)
+
+- Leverages the Windows Credential Manager using the `wincred` Go package.
+- Secrets are stored as generic credentials with a unique key composed of `service:username`.
+- Size constraints:
+  - Password max size: 2560 bytes.
+  - Service name limited to maximum of approximately 30 KB, but practical usage recommends smaller sizes.
+- Supports listing and deleting multiple credentials per service prefix.
+
+### Linux/BSD Provider (`secretServiceProvider`)
+
+- Implements the Freedesktop Secret Service API over D-Bus, commonly provided by GNOME Keyring or compatible.
+- Requires the `login` keyring collection to exist and be unlocked.
+- Secrets use attributes (`service` and `username`) to index credentials.
+- Supports creating, searching, unlocking, retrieving secrets, and deleting by service and user.
+
+#### Important Notes:
+
+- GNOME Keyring or equivalent Secret Service daemon must be running and accessible.
+- The default 'login' collection is used for storing secrets.
+- Unlock actions are performed automatically on the collection or individual items as necessary.
+
+### Fallback Provider
+
+- Used on unsupported OSes and returns the error `ErrUnsupportedPlatform` for all operations.
+
+---
+
+## Summary of Provider API Surface
+
+Each platform provider implements the following interface:
+
+```go
+type Keyring interface {
+  Set(service, user, password string) error
+  Get(service, user string) (string, error)
+  Delete(service, user string) error
+  DeleteAll(service string) error
+}
+```
+
+All consumers interact with the `go-keyring` API at this level; the correct underlying provider services the calls depending on the OS.
+
+---
+
+## Practical Considerations & Best Practices
+
+- **Cross-platform Compatibility:** When developing cross-platform applications, use the unified API and do not rely on platform specifics.
+- **Size Limits:** Be mindful of the platform-specific size constraints, particularly on macOS and Windows.
+- **UTF-8 and Multiline Passwords:** The macOS provider encodes data to handle multiline/secrets with special characters. On Linux and Windows, secret data is stored raw.
+- **Service and User Naming Conventions:** Consistently choose service and user identifiers to avoid collisions and improve secret retrieval accuracy.
+- **Environment Preparation:** On Linux/BSD, verify that the Secret Service daemon and keyrings are properly configured and unlocked; on macOS, ensure the `security` binary is accessible.
+
+---
+
+## Troubleshooting & Dependencies
+
+- If your application encounters `ErrNotFound`, the secret likely does not exist in the keyring.
+- For `ErrSetDataTooBig`, reduce the size of the secret or service/user identifiers.
+- On Linux/BSD, ensure the D-Bus session bus is accessible and the 'login' keyring collection exists and is unlocked.
+- On Windows, the Credential Manager service must be running, and adequate permissions must be granted.
+- Consult the [Platform Integration & Dependencies](../overview/architecture-usecases-integration/platform-integration) page for environment-specific setup and issue resolution strategies.
+
+---
+
+## Example: How go-keyring Chooses and Uses Providers
+
+Upon initializing your application:
+
+1. The library determines the current OS during build/runtime.
+2. Sets the internal `provider` variable to:
+   - `macOSXKeychain` for macOS
+   - `windowsKeychain` for Windows
+   - `secretServiceProvider` for Linux/BSD
+   - `fallbackServiceProvider` otherwise
+3. Your calls to `Set`, `Get`, `Delete`, or `DeleteAll` invoke the corresponding provider's methods.
+
+This design guarantees seamless usage without manual provider selection.
+
+---
+
+## Diagram: Provider Selection and Platform Integration
+
+```mermaid
+flowchart TD
+
+  A[Start: Application Initializes] --> B{Detection of OS}
+
+  B -->|macOS| C[Provider = "macOSXKeychain"]
+  B -->|Windows| D[Provider = "windowsKeychain"]
+  B -->|Linux/BSD| E[Provider = "secretServiceProvider"]
+  B -->|Unsupported OS| F[Provider = "fallbackServiceProvider"]
+
+  subgraph macOS Provider Flow
+    C --> C1[/usr/bin/security CLI]
+    C1 --> C2[OS X Keychain]
+  end
+
+  subgraph Windows Provider Flow
+    D --> D1[wincred package]
+    D1 --> D2[Windows Credential Manager]
+  end
+
+  subgraph Linux/BSD Provider Flow
+    E --> E1[Secret Service API over DBus]
+    E1 --> E2[GNOME Keyring or Equivalent]
+  end
+
+  subgraph Unsupported Provider
+    F --> ERROR[Return ErrUnsupportedPlatform]
+  end
+
+  %% User calls action flow
+  U[User calls Set/Get/Delete/DeleteAll] --> B
+
+  %% Style
+  classDef provider fill:#6fcf97,stroke:#000,stroke-width:1px,color:#000;
+  class C,D,E,F provider;
+```
+
+---
+
+## See Also
+
+- [Set Secret API](../core-keyring-apis/set-secret) — Store secrets across platforms.
+- [Get Secret API](../core-keyring-apis/get-secret) — Retrieve secrets reliably.
+- [Delete Secret API](../core-keyring-apis/delete-secret) — Remove secrets cleanly.
+- [Platform Integration & Dependencies](../../overview/architecture-usecases-integration/platform-integration) — Environment setup and OS specifics.
+- [Mock Provider for Testing](./mock-provider) — Use the in-memory mock provider for local validation.
+- [Prerequisites & Supported Platforms](../../getting-started/setup-basics/prerequisites) — OS support and external system requirements.
+
+---
+
+## Summary
+This page equips you with essential understanding of the provider implementations behind `go-keyring`. It clarifies how the library adapts seamlessly across macOS, Linux/BSD, and Windows, ensuring robust, native secret management leveraging platform-specific technologies with consistent API behavior.
+
+---
