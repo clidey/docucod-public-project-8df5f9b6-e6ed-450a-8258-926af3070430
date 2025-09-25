@@ -1,0 +1,176 @@
+---
+title: "Prerequisites & Supported Platforms"
+description: "Understand which operating systems are supported and what dependencies you need—before you start. Covers macOS, Linux/BSD (dbus), and Windows, including key system tools and services involved in secure storage."
+---
+
+# Prerequisites & Supported Platforms
+
+Understanding the environments where **go-keyring** operates and what system components it depends on is crucial before integrating it into your applications. This guide covers the supported operating systems, key system dependencies, and essential tools you need to have in place to successfully use go-keyring for secure secret management.
+
+---
+
+## Supported Operating Systems
+
+**go-keyring** is designed as a cross-platform Go library supporting the following operating systems:
+
+- **macOS (OS X)**
+- **Linux and BSD variants** (with D-Bus support)
+- **Microsoft Windows**
+
+Each platform integrates with native key management systems to securely store and retrieve secrets.
+
+---
+
+## System Dependencies
+
+### macOS
+
+- **Required Tool:** `/usr/bin/security` command-line binary
+
+The macOS implementation leverages the built-in `security` binary to interface with the system's Keychain. This binary is included by default on macOS and requires no additional installation.
+
+---
+
+### Linux and BSD (dbus-based systems)
+
+- **Required Service:** DBus Secret Service API
+- **Typical Implementation:** GNOME Keyring
+
+On Linux and BSD platforms, go-keyring depends on the Secret Service API accessible via DBus. This interface is most commonly provided by the GNOME Keyring daemon.
+
+#### Expected Keyring Collection
+
+- The `login` keyring collection should exist, as it is the default on most distributions.
+- If missing, create the `login` keyring using the `Seahorse` GUI:
+  1. Open the **Seahorse** application.
+  2. Navigate to **File > New > Password Keyring**.
+  3. Click **Continue**.
+  4. Name the keyring **login**.
+
+This ensures go-keyring can store secrets securely in the default keyring.
+
+---
+
+### Windows
+
+- **Required Component:** Windows Credential Manager
+
+On Windows, go-keyring integrates natively with the Windows Credential Manager. No extra setup is typically needed beyond default system configuration.
+
+---
+
+## Key System Tools and Services Overview
+
+| Platform | Native Keyring Interface | Key Dependency                | Notes                          |
+|----------|--------------------------|------------------------------|--------------------------------|
+| macOS    | Keychain                 | `/usr/bin/security`           | Present by default on all macOS installations |
+| Linux/BSD| Secret Service API       | GNOME Keyring (via DBus)      | Ensure `login` keyring exists; use Seahorse to manage keyrings |
+| Windows  | Windows Credential Manager | Built-in system component    | Supported on all modern Windows versions |
+
+---
+
+## Practical Considerations
+
+- Always verify the native keyring components are functional and accessible by your application context.
+- On Linux/BSD, if `dbus` or GNOME Keyring are not installed or running, secrets storage will fail.
+- macOS apps need permission to access the Keychain; ensure your environment permits interactions with `/usr/bin/security`.
+- Windows credential storage limits exist: passwords max ~2560 bytes, service names max ~30 KB. Exceeding these triggers `ErrSetDataTooBig`.
+
+---
+
+## Version and Compatibility Notes
+
+- go-keyring aims to work across various distributions and OS versions but is tested primarily on major stable releases.
+- The library is statically linked avoiding C bindings, simplifying usage with standalone Go binaries.
+
+---
+
+## Troubleshooting Tips
+
+- If secret operations fail with `ErrNotFound`, confirm that the service and user values match exactly, including case.
+- On Linux/BSD, ensure the `dbus` session and keyring services are running:
+  ```bash
+  systemctl --user status dbus
+  systemctl --user status gnome-keyring
+  ```
+- On macOS, try executing `/usr/bin/security` commands manually to verify availability.
+- Windows users might encounter errors if the credential manager service is disabled or if user permissions limit access.
+
+---
+
+## Summary
+
+Before starting to use go-keyring, ensure your target system supports one of the recognized platforms with the necessary native keyring services installed and running. Proper setup of these dependencies guarantees secure storage and retrieval of secrets using the familiar OS-native mechanisms.
+
+---
+
+## Related Documentation
+
+- [Installing go-keyring](/getting-started/setup-basics/installation): How to install the library.
+- [Configuration and First Steps](/getting-started/setup-basics/configuration): Initial use after setup.
+- [Platform Integration & Dependencies](/overview/architecture-usecases-integration/platform-integration): In-depth details on platform-specific integrations.
+- [Troubleshooting & Common Setup Issues](/getting-started/usage-validation/troubleshooting): Handling setup problems.
+
+---
+
+## Example: Confirming GNOME Keyring `login` Collection on Linux
+
+1. Open terminal.
+2. Launch Seahorse GUI:
+   ```bash
+   seahorse
+   ```
+3. If `login` is missing:
+   - Go to **File > New > Password Keyring**.
+   - Name it `login` and create.
+4. Restart keyring-related services or log out and back in.
+
+This ensures go-keyring can access the default key collection.
+
+---
+
+## Code Snippet: Using go-keyring (for context)
+
+```go
+package main
+
+import (
+    "log"
+    "github.com/zalando/go-keyring"
+)
+
+func main() {
+    service := "my-app"
+    user := "anon"
+    password := "secret"
+
+    // Store password
+    if err := keyring.Set(service, user, password); err != nil {
+        log.Fatal(err)
+    }
+
+    // Retrieve password
+    secret, err := keyring.Get(service, user)
+    if err != nil {
+        log.Fatal(err)
+    }
+    log.Printf("Retrieved password: %s", secret)
+}
+```
+
+---
+
+<Tip>
+On Linux and BSD systems, using go-keyring requires that the DBus session and GNOME Keyring daemon are properly running in your user session. Without these, secret storage and retrieval will not work.
+</Tip>
+
+<Warning>
+Windows and macOS have technical limits on the size of secrets and service names. Going beyond these limits results in errors during storage. Always keep credential sizes within documented bounds.
+</Warning>
+
+<Check>
+To validate you’re on a supported platform with functional dependencies:
+- macOS: run `which security` and verify the binary exists
+- Linux/BSD: verify `dbus` is running and `seahorse` shows an active `login` keyring
+- Windows: ensure Credential Manager service is enabled and accessible
+</Check>
