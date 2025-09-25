@@ -1,0 +1,287 @@
+---
+title: "Testing and Mocking go-keyring Operations"
+description: "Learn how to leverage go-keyring's mocking feature for reliable testing on systems without a native keyring or to simulate different scenarios. Includes usage of `MockInit()`, writing effective tests, and integrating with continuous integration pipelines."
+---
+
+# Testing and Mocking go-keyring Operations
+
+## Overview
+This guide helps you leverage go-keyring's built-in mocking feature to perform reliable, repeatable tests of secret management without depending on a native OS keyring. It covers how to initialize the mock provider, write effective test cases using it, simulate error scenarios, and integrate mocking into continuous integration pipelines for consistent cross-platform validation.
+
+### Prerequisites
+- Familiarity with Go and basic testing practices in Go.
+- go-keyring installed and configured in your project.
+- Knowledge of service and user identifiers as used in go-keyring.
+
+### Expected Outcome
+By following this guide, you will:
+- Replace the OS-specific keyring provider with an in-memory mock implementation.
+- Write unit tests that interact with a mock keyring storing secrets in memory.
+- Simulate error conditions to test error handling.
+- Execute tests in environments without a native keyring (e.g., CI pipelines) reliably.
+
+### Time Estimate
+10-20 minutes for setup and writing sample tests.
+
+### Difficulty Level
+Beginner to Intermediate (depending on prior Go testing experience).
+
+---
+
+## Why Use the Mock Provider?
+
+In real-world development, testing keyring interactions faces challenges:
+
+- Some platforms may not have a native keyring configured or accessible (e.g., lightweight containers, CI systems).
+- Testing edge cases such as error returns from the keyring provider can be cumbersome with native backends.
+- Tests should be repeatable and isolated, avoiding dependencies on external state.
+
+The mock provider in go-keyring addresses these by providing an in-memory, fully controllable keyring simulation.
+
+
+## Getting Started: Initializing the Mock Provider
+
+The mock provider is activated by calling `MockInit()` from the `keyring` package.
+
+This replaces the underlying OS provider for all subsequent keyring operations (`Set`, `Get`, `Delete`, `DeleteAll`) with an in-memory store.
+
+```go
+import "github.com/zalando/go-keyring"
+
+func TestMockSetup(t *testing.T) {
+    keyring.MockInit() // activate mock provider
+
+    err := keyring.Set("my-service", "user1", "secretpass")
+    if err != nil {
+        t.Fatalf("Failed to set secret: %v", err)
+    }
+
+    password, err := keyring.Get("my-service", "user1")
+    if err != nil {
+        t.Fatalf("Failed to get secret: %v", err)
+    }
+
+    if password != "secretpass" {
+        t.Errorf("Expected 'secretpass', got %q", password)
+    }
+}
+```
+
+> Once initialized, the mock persists secrets only in-memory for the process lifetime. Each test can start fresh by calling `MockInit()` again.
+
+
+## Writing Tests Using the Mock Provider
+
+Use the mock provider to simulate realistic secret management workflows:
+
+1. **Set a secret** with `Set(service, user, password)`
+2. **Retrieve** the secret using `Get(service, user)`
+3. **Delete** secrets individually with `Delete(service, user)` or all for a service using `DeleteAll(service)`
+
+Example test demonstrating these steps:
+
+```go
+func TestMockFullLifecycle(t *testing.T) {
+    keyring.MockInit()
+
+    service := "app-service"
+    user := "test-user"
+    password := "p@ssw0rd"
+
+    // Store secret
+    if err := keyring.Set(service, user, password); err != nil {
+        t.Fatalf("Failed to set secret: %v", err)
+    }
+
+    // Retrieve secret
+    got, err := keyring.Get(service, user)
+    if err != nil {
+        t.Fatalf("Failed to get secret: %v", err)
+    }
+    if got != password {
+        t.Errorf("Expected password %q, got %q", password, got)
+    }
+
+    // Delete secret
+    if err := keyring.Delete(service, user); err != nil {
+        t.Fatalf("Failed to delete secret: %v", err)
+    }
+
+    // Confirm deletion returns ErrNotFound
+    if _, err := keyring.Get(service, user); err != keyring.ErrNotFound {
+        t.Errorf("Expected ErrNotFound after delete, got %v", err)
+    }
+}
+```
+
+
+## Simulating Errors in Tests
+
+For robust testing, you can simulate keyring operation failures by initializing the mock with a predefined error using `MockInitWithError(err error)`.
+
+All `Set`, `Get`, `Delete`, and `DeleteAll` operations then return the specified error.
+
+Example:
+
+```go
+func TestMockWithSimulatedError(t *testing.T) {
+    mockErr := errors.New("forced mock error")
+    keyring.MockInitWithError(mockErr)
+
+    err := keyring.Set("service", "user", "password")
+    if err != mockErr {
+        t.Errorf("Expected error %v, got %v", mockErr, err)
+    }
+
+    _, err = keyring.Get("service", "user")
+    if err != mockErr {
+        t.Errorf("Expected error %v, got %v", mockErr, err)
+    }
+
+    err = keyring.Delete("service", "user")
+    if err != mockErr {
+        t.Errorf("Expected error %v, got %v", mockErr, err)
+    }
+}
+```
+
+This approach allows your tests to verify error-handling pathways cleanly without external dependencies.
+
+
+## Best Practices for Using the Mock Provider
+
+- **Initialize mock provider early** in test code (e.g. in a test setup function or per test) to guarantee isolation.
+- **Avoid sharing mock state across tests** unless explicitly intended.
+- Use **realistic but simple service and user names** to clearly separate test data.
+- Combine mock testing with real keyring tests on supported platforms to ensure parity.
+- Utilize error simulation to cover negative cases reliably.
+
+
+## Integrating Mock Testing in CI Pipelines
+
+Many CI environments lack native keyring support or restrict system keyring access.
+
+Using `MockInit()` ensures your secret management tests run consistently in such environments without failures due to missing platform dependencies.
+
+### Example GitHub Actions snippet for Go tests:
+
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: '1.19'
+
+    - name: Run Tests with Mock Provider
+      run: |
+        go test -v ./... \
+          -run TestMock
+```
+
+Here your tests prefixed with `TestMock` leverage the mock provider for validation.
+
+
+## Troubleshooting Common Issues
+
+<AccordionGroup title="Mock Provider Troubleshooting">
+<Accordion title="Tests Fail to Find Mock Methods">
+Ensure you have imported the `github.com/zalando/go-keyring` package and called `keyring.MockInit()` before invoking any Set/Get/Delete calls.
+If using multiple packages, confirm mock initialization propagates correctly.
+</Accordion>
+<Accordion title="Secrets Don't Persist Across Tests">
+This behavior is by design. The mock store is in-memory and resets on each test run or when `MockInit()` is called again. To maintain state, manage initialization carefully.
+</Accordion>
+<Accordion title="Simulated Error Mode Always Returns Errors">
+When using `MockInitWithError`, all operations will fail with the error provided. Use this only for dedicated error-path testing.
+</Accordion>
+</AccordionGroup>
+
+
+## Summary
+
+The mock provider makes testing go-keyring operations simple and reliable without native keyring dependencies. It supports full lifecycle secret storage, retrieval, deletion, and error simulation, enabling comprehensive unit and integration testing. By integrating this early in your test suites and CI pipelines, you ensure robust, platform-agnostic secret management validation.
+
+
+---
+
+## Additional Examples
+
+### Complete Small Test Example Using Mock
+
+```go
+package yourpackage
+
+import (
+    "errors"
+    "testing"
+
+    "github.com/zalando/go-keyring"
+)
+
+func TestMockedSetGet(t *testing.T) {
+    keyring.MockInit()
+
+    err := keyring.Set("service", "user", "password")
+    if err != nil {
+        t.Fatal(err)
+    }
+
+    p, err := keyring.Get("service", "user")
+    if err != nil {
+        t.Fatal(err)
+    }
+
+    if p != "password" {
+        t.Error("password was not the expected string")
+    }
+}
+
+func TestMockedError(t *testing.T) {
+    keyring.MockInitWithError(errors.New("mock error"))
+
+    if err := keyring.Set("service", "user", "pass"); err == nil {
+        t.Error("expected error, got nil")
+    }
+}
+```
+
+
+---
+
+## Related Documentation
+
+- [Mock Provider for Testing](https://docs.go-keyring.dev/api-reference/platform-and-testing-apis/mock-provider) — API details for the mock provider.
+- [Quickstart: Set and Get Your First Secret](https://docs.go-keyring.dev/getting-started/usage-validation/quickstart-example) — Hands-on guide for basic usage.
+- [Platform Integration & Dependencies](https://docs.go-keyring.dev/overview/architecture-usecases-integration/platform-integration) — Understand OS support and dependencies.
+- [Troubleshooting & Common Setup Issues](https://docs.go-keyring.dev/getting-started/usage-validation/troubleshooting) — Help for common errors.
+
+
+---
+
+## What's Next?
+
+- Incorporate mock testing early during development to verify secret workflows.
+- Combine mock tests with platform-specific tests for broader coverage.
+- Extend tests to cover error handling using `MockInitWithError`.
+- Automate tests in CI pipelines for continuous validation.
+
+
+---  
+
+# Appendix: Internal Mock Provider Behavior (Implementation Insight)
+
+The mock provider acts as an in-memory map keyed by service and user.
+
+- Secrets are stored in `map[string]map[string]string`.
+- If initialized with `mockError`, all operations simulate failure with that error.
+- Supports `Set`, `Get`, `Delete`, and `DeleteAll` methods.
+
+This ensures fidelity to the real provider API, with test control.
+
+---
