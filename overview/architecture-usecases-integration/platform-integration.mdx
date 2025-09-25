@@ -1,0 +1,200 @@
+---
+title: "Platform Integration & Dependencies"
+description: "Explains how go-keyring connects with native keyring implementations on macOS (via 'security'), Linux/BSD (via Secret Service/DBus), and Windows. Lists OS-level dependencies and describes fallback/mocking strategies for testability."
+---
+
+# Platform Integration & Dependencies
+
+## Seamless Native Integration Across Major Operating Systems
+
+go-keyring connects your Go applications securely to the native keyring services provided by macOS, Linux/BSD, and Windows. This ensures your sensitive data — such as passwords, tokens, and secrets — benefits from the highest level of system-native security and user trust.
+
+By leveraging OS-native keyring interfaces, go-keyring abstracts away complex platform-specific details, presenting you with a unified API for secure secret storage and retrieval.
+
+---
+
+## How go-keyring Integrates with Each Platform
+
+### macOS Integration
+
+On macOS, go-keyring interacts directly with the `security` command-line tool located at `/usr/bin/security`. This binary is part of the OS and provides access to the macOS Keychain.
+
+- **Communication Method:** Invokes the `security` binary with appropriate commands to add, retrieve, or delete secrets.
+- **Encoding:** To handle multiline or non-ASCII passwords reliably, secrets are base64-encoded before storage and decoded on retrieval.
+- **Error Handling:** If a secret is not found, go-keyring appropriately returns a `ErrNotFound` error.
+
+### Linux and BSD Integration
+
+On Linux and BSD systems, go-keyring uses the [Secret Service API](https://specifications.freedesktop.org/secret-service-spec/latest/) via D-Bus to securely interface with available keyring services such as GNOME Keyring.
+
+- **Dependencies:** Requires a D-Bus compatible secret service running, typically `gnome-keyring`.
+- **Keyring Identification:** Expects a default keyring collection named `login` (the default in most distributions).
+- **Operations:** Uses the Secret Service API to open sessions, unlock collections, create new secret items, search, retrieve, and delete secrets.
+- **User Setup:** If the `login` keyring is missing, users can create it using keyring frontends like [Seahorse](https://wiki.gnome.org/Apps/Seahorse).
+
+### Windows Integration
+
+On Windows, go-keyring uses the Windows Credential Manager via the [wincred](https://github.com/danieljoos/wincred) library for seamless access.
+
+- **Credential Identification:** Combines service and username into a unique credential target name for storage and retrieval.
+- **Limits & Constraints:** Enforces Windows-specific limits on password and service name lengths to avoid errors.
+- **Error Handling:** Returns `ErrNotFound` when credentials do not exist.
+
+---
+
+## OS-Level Dependencies
+
+| Platform  | Key Dependency / Service                   | Notes                                                                |
+| --------- | ----------------------------------------- | -------------------------------------------------------------------- |
+| macOS    | `/usr/bin/security` binary (OS built-in)  | Available by default on all macOS installations                      |
+| Linux/BSD | Secret Service DBus interface (e.g., GNOME Keyring) | Requires a running desktop keyring service compliant with Secret Service API |
+| Windows   | Windows Credential Manager (via wincred)  | Built into Windows OS                                                |
+
+
+### Ensuring Your Environment Is Ready
+
+- **macOS:** No additional setup is normally required.
+- **Linux/BSD:** Make sure `gnome-keyring` or compatible service is installed and running. Verify the `login` keyring exists or create it using GUI tools like Seahorse.
+- **Windows:** No setup needed beyond standard OS installation.
+
+---
+
+## Fallback and Mocking Strategies for Robustness and Testing
+
+go-keyring includes built-in support for fallback and mock providers to enhance developer experience and testing capability.
+
+### Fallback Provider
+
+- **Purpose:** Provides a stub implementation that always returns an unsupported platform error.
+- **Use Case:** Enables graceful failure on platforms where no supported backend exists.
+
+### Mock Provider for Testing
+
+- **Purpose:** Offers an in-memory, no dependencies mock keyring implementation.
+- **Benefits:** Facilitates unit testing and local validation on any platform, including CI pipelines or development environments without native keyrings.
+
+Example usage to initialize the mock provider:
+
+```go
+import "github.com/zalando/go-keyring"
+
+func setupMock() {
+   keyring.MockInit() // replaces the native provider with an in-memory mock
+}
+```
+
+This allows you to write tests that simulate keyring operations without relying on OS dependencies, improving test reliability and speed.
+
+---
+
+## Practical Tips & Best Practices
+
+- **Verify Dependencies Before Deployment:** Check that the required OS-level services or binaries are available on your target environment.
+- **Handle Errors Gracefully:** Always expect and handle `ErrNotFound` as a signal that no stored secret exists for a given key.
+- **Respect Platform Limits:** Be mindful of platform-specific size limits on secret values and service names to avoid `ErrSetDataTooBig` errors.
+- **Testing:** Integrate the mock provider in your automated tests to simulate keyring behavior without external dependencies.
+
+
+## Quick Example: What Happens Under the Hood When You Call `keyring.Set`
+
+- On **macOS**, the password is base64 encoded and then passed to the `security add-generic-password` CLI command.
+- On **Linux/BSD**, go-keyring uses dbus calls to create or update an item in the default Secret Service collection.
+- On **Windows**, the credentials are stored with a combined service:user identifier using the Windows Credential Manager API.
+
+
+## Summary Diagram of Platform Integrations
+
+```mermaid
+flowchart TD
+
+    A[User Application] -->|Invoke go-keyring API| B{OS Platform}
+
+    subgraph macOS
+      B --> C[/usr/bin/security CLI]
+      C --> D[macOS Keychain]
+    end
+
+    subgraph Linux_BSD
+      B --> E[Secret Service API via DBus]
+      E --> F[GNOME Keyring or Compatible Service]
+    end
+
+    subgraph Windows
+      B --> G[Windows Credential Manager API]
+      G --> H[Windows Credential Vault]
+    end
+
+    subgraph Testing
+      B --> I[mockProvider (in-memory)]
+    end
+
+    style macOS fill:#f9f,stroke:#333,stroke-width:1px
+    style Linux_BSD fill:#ccf,stroke:#333,stroke-width:1px
+    style Windows fill:#cfc,stroke:#333,stroke-width:1px
+    style Testing fill:#fcf,stroke:#333,stroke-width:1px
+```
+
+
+## Troubleshooting Common Integration Issues
+
+<AccordionGroup title="Common Platform Issues and Their Solutions">
+<Accordion title="macOS: 'security' Binary Not Found or Errors">
+Ensure `/usr/bin/security` exists and is executable on your system. This binary is standard on macOS; if missing, the OS might be damaged or misconfigured.
+
+Check your PATH environment and permissions.
+</Accordion>
+<Accordion title="Linux: Missing 'login' Keyring or Secret Service Not Available">
+Verify that a Secret Service-compatible keyring daemon runs (e.g., GNOME Keyring).
+
+If the default `login` keyring is not found, create it using Seahorse:
+
+- Open Seahorse
+- Choose File > New > Password Keyring
+- Name it `login`
+
+Restart your session or the keyring daemon after creation.
+</Accordion>
+<Accordion title="Windows: Credential Manager Errors or Access Denied">
+Make sure your application has appropriate permissions to access Credential Manager.
+
+Check size limits for service and password strings to avoid `ErrSetDataTooBig` errors.
+
+Restart your machine if Credential Manager service appears unstable.
+</Accordion>
+</AccordionGroup>
+
+---
+
+By understanding each platform’s native integration, its dependencies, and fallback strategies, you can confidently rely on go-keyring to manage secrets securely and seamlessly across diverse environments.
+
+
+
+---
+
+## Next Steps
+
+- To see the simple, unified API for managing secrets, visit the [Core Features & Benefits](/overview/product-intro-core-concepts/features-and-benefits) page.
+- For practical guidance on setting up go-keyring and prerequisites, consult [Prerequisites & Supported Platforms](/getting-started/setup-basics/prerequisites).
+- Dive into [Quickstart: Set and Get Your First Secret](/getting-started/usage-validation/quickstart-example) for hands-on examples.
+- Explore the [Mock Provider for Testing](/api-reference/platform-and-testing-apis/mock-provider) if you want to integrate robust testing strategies.
+
+---
+
+[Secret Service Specification](https://specifications.freedesktop.org/secret-service-spec/latest/)
+
+[GNOME Keyring](https://wiki.gnome.org/Projects/GnomeKeyring)
+
+[Seahorse - Passwords and Keys](https://wiki.gnome.org/Apps/Seahorse)
+
+
+
+---
+
+_Source: Adapted from go-keyring source and README.md_
+
+---
+
+\
+---
+
+_If you encounter issues during integration, refer to [Troubleshooting & Common Setup Issues](/getting-started/usage-validation/troubleshooting) for additional assistance._
